@@ -133,20 +133,18 @@ TOGE = [
     "....kk....kk....",
     "...kkk....kkk...",
 ]
-STAMP = [
-    "W.WW.WW.WW.W",
-    "WWWWWWWWWWWW",
-    ".WBBBBBBBBW.",
-    "WWBRRBBRRBWW",
-    ".WRrRRRRRRW.",
-    "WWRRRRRRRRWW",
-    ".WBRRRRRRBW.",
-    "WWBBRRRRBBWW",
-    ".WBBBRRBBBW.",
-    "WWBBBBBBBBWW",
-    ".WCCCCCCCCW.",
-    "WWWWWWWWWWWW",
-    "W.WW.WW.WW.W",
+STAMP = [  # v3: 12x13 -> 11x11 (少し小さく)
+    "W.WW.W.WW.W",
+    "WWWWWWWWWWW",
+    ".WBBBBBBBW.",
+    "WWBRRBRRBWW",
+    ".WRrRRRRRW.",
+    "WWRRRRRRRWW",
+    ".WBRRRRRBW.",
+    "WWBBRRRBBWW",
+    ".WBBBRBBBW.",
+    "WWWWWWWWWWW",
+    "W.WW.W.WW.W",
 ]
 GEM = [
     "...AA...",
@@ -366,7 +364,7 @@ def draw_world():
         sc.alpha_composite(PLANK, (x, GY - 50))
     shadow = Image.new('RGBA', (64, 3), (0, 0, 0, 50)); sc.alpha_composite(shadow, (96, GY - 44))
     sc.alpha_composite(S['LETTERBLK'], (120, GY - 98))
-    for x, y in ((98, GY - 68), (144, GY - 68), (186, GY - 46), (202, GY - 46)):
+    for x, y in ((99, GY - 66), (145, GY - 66), (187, GY - 44), (202, GY - 44)):
         sc.alpha_composite(S['STAMP'], (x, y))
     # ground shadows under characters
     def foot_shadow(cx, w=12):
@@ -454,7 +452,7 @@ cw, ch = 220, 250
 sheet = Image.new('RGB', (cw * 4 + 16, ch * 2 + 80), (22, 24, 44))
 sd = ImageDraw.Draw(sheet)
 F = font(JP, 22); Fs = font(JP, 16)
-sd.text((24, 22), "ミスターポストマン　キャラクター見本（現代風ドット絵・仮 v2）", font=F, fill=(255, 255, 255))
+sd.text((24, 22), "ミスターポストマン　キャラクター見本（現代風ドット絵・仮 v3）", font=F, fill=(255, 255, 255))
 for i, (k, n, desc) in enumerate(items):
     cx = 8 + (i % 4) * cw; cy = 70 + (i // 4) * ch
     card = Image.new('RGBA', (cw - 16, ch - 12))
@@ -465,7 +463,7 @@ for i, (k, n, desc) in enumerate(items):
     mask = Image.new('L', card.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, card.size[0] - 1, card.size[1] - 1), 18, fill=255)
     sheet.paste(card, (cx + 8, cy), mask)
-    im = S[k]; s = 7 if im.size[1] <= 16 else (6 if im.size[1] <= 21 else 5)
+    im = S[k]; s = 6 if k == 'STAMP' else (7 if im.size[1] <= 16 else (6 if im.size[1] <= 21 else 5))
     big = im.resize((im.size[0] * s, im.size[1] * s), Image.NEAREST)
     sheet.paste(big, (cx + cw // 2 - big.size[0] // 2, cy + 18 + (140 - big.size[1]) // 2), big)
     sd.rounded_rectangle((cx + 16, cy + ch - 84, cx + cw - 16, cy + ch - 22), 12, fill=(20, 24, 48))
@@ -483,3 +481,182 @@ bd.text((12, 16), "クリア前：色をうばわれた世界", font=F, fill=(20
 bd.text((W * 2 + 32, 16), "クリア後：色がもどる！", font=F, fill=(255, 226, 120))
 ba.save(f"{OUT}/sample_color_return.png")
 print("ok")
+
+# ================================================================ items (v3)
+P.update({
+    'f': (255, 182, 210), 'j': (230, 110, 160),                 # pink envelope
+    'c': (214, 170, 110), 'x': (170, 124, 70), 'X': (240, 206, 150),  # cardboard
+    'e': (60, 60, 70),                                          # nori
+})
+LETTER_1UP = [
+    "jjjjjjjjjjjjjjjj",
+    "jfjffffffffffjfj",
+    "jffjffffffffjffj",
+    "jfffjffffffjfffj",
+    "jffffjfRRfjffffj",
+    "jfffffRrRRfffffj",
+    "jffffffRRffffffj",
+    "jffffffffffffffj",
+    "jffffffffffffffj",
+    "jjjjjjjjjjjjjjjj",
+]
+ONIGIRI = [
+    "......WW......",
+    ".....WWWW.....",
+    "....WWWWWW....",
+    "...WWWWWWWW...",
+    "..WWWWWWWWww..",
+    ".WWWWWWWWWWww.",
+    ".WWWeeeeeeWww.",
+    "WWWWeeeeeeWwww",
+    "WWWWeeeeeewwww",
+    ".wwweeeeeewww.",
+]
+BOOTS = [
+    "..TTTT.....TTTT.",
+    "..TttT.....TttT.",
+    "..TTTT.....TTTT.",
+    "..TTTTTT...TTTTTT",
+    "..kkkkkk...kkkkkk",
+    "...ZzZ......ZzZ..",
+    "....Z........Z...",
+    "...ZzZ......ZzZ..",
+    "....Z........Z...",
+    "..zzzzz....zzzzz.",
+]
+LANTERN = [
+    ".....ZZZZ.....",
+    "....Z....Z....",
+    "...zzzzzzzz...",
+    "...zGGGGGGz...",
+    "...zGYYYYGz...",
+    "...zGYWWYGz...",
+    "...zGYWWYGz...",
+    "...zGYYYYGz...",
+    "...zGGGGGGz...",
+    "...zzzzzzzz...",
+    "....zzzzzz....",
+]
+PLANE = [
+    "WW..............",
+    ".wWWW...........",
+    "..wwWWWWW.......",
+    "...wwwWWWWWWW...",
+    "....wwwwWWWWWWWW",
+    "....wwwwwwwWW...",
+    "...wwlllww......",
+    "..wll...........",
+    ".ll.............",
+]
+PARCEL = [
+    "xxxxxxxRRxxxxxxx",
+    "xXXXXXXRRXXXXXXx",
+    "xXccccccRccccccx",
+    "xXccccccRccccccx",
+    "xXccccccRccccccx",
+    "xXccccccRccccccx",
+    "RRRRRRRRRRRRRRRR",
+    "RRRRRRRRRRRRRRRR",
+    "xXccccccRccccccx",
+    "xXcccccRrRcccccx",
+    "xXccccccRccccccx",
+    "xXccccccRccccccx",
+    "xXccccccRccccccx",
+    "xxxxxxxxRxxxxxxx",
+    "xxxxxxxxxxxxxxxx",
+]
+
+
+def scarf():
+    cols = [P['R'], P['O'], P['Y'], (110, 210, 70), P['B'], P['P']]
+    im = Image.new('RGBA', (22, 18), (0, 0, 0, 0))
+    for x in range(22):
+        yo = int(round(2.5 * math.sin(x * 0.45))) + 3
+        for i, c in enumerate(cols):
+            im.putpixel((x, yo + i * 2), c + (255,))
+            im.putpixel((x, yo + i * 2 + 1), c + (255,))
+    for x in (18, 20):            # fringe
+        im.putpixel((x, 17), cols[5] + (255,))
+    out = Image.new('RGBA', (24, 20), (0, 0, 0, 0)); out.paste(im, (1, 1))
+    src = out.copy()
+    for y in range(out.size[1]):
+        for x in range(out.size[0]):
+            if src.getpixel((x, y))[3]:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < out.size[0] and 0 <= ny < out.size[1] and src.getpixel((nx, ny))[3]:
+                    out.putpixel((x, y), P['K'] + (255,)); break
+    return out
+
+
+def hidden_block():
+    im = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for i in range(0, 16, 2):
+        for (x, y) in ((i, 0), (i, 15), (0, i), (15, i)):
+            d.point((x, y), fill=(255, 255, 255, 170))
+    for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (0, 2), (0, -2), (2, 0), (-2, 0)):
+        d.point((8 + dx, 8 + dy), fill=(255, 255, 255, 150))
+    return im
+
+
+def invincible():
+    base = S['POSTMAN'].copy()
+    rainbow = [(255, 90, 90), (255, 170, 60), (255, 230, 80), (110, 220, 90), (90, 160, 255), (190, 110, 255)]
+    w, h = base.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = base.getpixel((x, y))
+            if a and (r, g, b) != P['K']:
+                c = rainbow[((x + y) // 3) % len(rainbow)]
+                base.putpixel((x, y), lerp((r, g, b), c, 0.45) + (255,))
+    out = Image.new('RGBA', (w + 8, h + 4), (0, 0, 0, 0)); out.paste(base, (4, 2))
+    for sx, sy in ((1, 3), (w + 5, 6), (2, h - 2), (w + 6, h - 5)):
+        for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+            out.putpixel((sx + dx, sy + dy), P['G'] + (255,))
+    return out
+
+
+for k, v in dict(LETTER_1UP=LETTER_1UP, ONIGIRI=ONIGIRI, BOOTS=BOOTS, LANTERN=LANTERN, PLANE=PLANE).items():
+    S[k] = spr(v)
+S['PARCEL'] = spr(PARCEL, outline=False)
+S['SCARF'] = scarf()
+S['HIDDEN'] = hidden_block()
+S['INVINCIBLE'] = invincible()
+
+groups = [
+    ("集めもの・回復", [('STAMP', 'ハート切手', '100枚で1UP'), ('LETTER_1UP', 'はげましの手紙', '1UP（のこり+1）'),
+                   ('SCARF', 'ニジのスカーフ', '約8秒むてき'), ('ONIGIRI', 'おにぎり', 'ハート1つ回復')]),
+    ("パワーアップ", [('BOOTS', 'バネぐつ', '2段ジャンプ'), ('LANTERN', 'ランタン', '光の玉を投げる'),
+                 ('PLANE', '紙ひこうきマント', '長押しで滑空'), ('INVINCIBLE', 'むてき中のすがた', '虹色に光る')]),
+    ("ブロック", [('LETTERBLK', '手紙ブロック', 'アイテムが1つ出る'), ('PARCEL', '小包ブロック', '何回もたたける'),
+              ('HIDDEN', 'かくしブロック', '見えない・1UPなど'), ('POSTMAN', '（大きさ比較）', '主人公')]),
+]
+cw, ch = 220, 230
+IS = 5   # すべて同じ倍率 → 実際の大きさの比率がわかる
+sheet = Image.new('RGB', (cw * 4 + 16, 70 + len(groups) * (ch + 40)), (22, 24, 44))
+sd = ImageDraw.Draw(sheet)
+sd.text((24, 22), "ミスターポストマン　アイテム見本（仮 v3・すべて同じ倍率）", font=F, fill=(255, 255, 255))
+y0 = 70
+for title, row in groups:
+    sd.text((24, y0), "■ " + title, font=Fs, fill=(150, 200, 255))
+    for i, (k, n, desc) in enumerate(row):
+        cx = 8 + i * cw; cy = y0 + 28
+        card = Image.new('RGBA', (cw - 16, ch - 12))
+        cd = ImageDraw.Draw(card)
+        for yy in range(card.size[1]):
+            cd.line((0, yy, card.size[0], yy), fill=lerp((92, 150, 250), (196, 228, 255), yy / card.size[1]) + (255,))
+        mask = Image.new('L', card.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, card.size[0] - 1, card.size[1] - 1), 18, fill=255)
+        sheet.paste(card, (cx + 8, cy), mask)
+        im = S[k]
+        big = im.resize((im.size[0] * IS, im.size[1] * IS), Image.NEAREST)
+        sheet.paste(big, (cx + cw // 2 - big.size[0] // 2, cy + 14 + (124 - big.size[1]) // 2), big)
+        sd.rounded_rectangle((cx + 16, cy + ch - 84, cx + cw - 16, cy + ch - 22), 12, fill=(20, 24, 48))
+        sd.text((cx + 28, cy + ch - 78), n, font=F if len(n) <= 7 else font(JP, 18), fill=(255, 255, 255))
+        sd.text((cx + 28, cy + ch - 48), desc, font=Fs, fill=(255, 226, 140))
+    y0 += ch + 40
+sheet.save(f"{OUT}/sample_items.png")
+print("items ok")
+
