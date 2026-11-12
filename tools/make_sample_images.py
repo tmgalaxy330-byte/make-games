@@ -618,7 +618,31 @@ def invincible():
     return out
 
 
-for k, v in dict(LETTER_1UP=LETTER_1UP, ONIGIRI=ONIGIRI, BOOTS=BOOTS, LANTERN=LANTERN, PLANE=PLANE).items():
+BIGBAG = [
+    "....NNNNNNNN....",
+    "...N........N...",
+    "..N..........N..",
+    "NNNNNNNNNNNNNNNN",
+    "NnnnnnnnnnnnnnnN",
+    "NnWWWWWnnnYYnnnN",
+    "NnWwwwWnnnYYnnnN",
+    "NnWWWWWnnnnnnnnN",
+    "NnnnnnnnnnnnnnnN",
+    "NNNNNNNNNNNNNNNN",
+]
+POSTMAN_BAG = POSTMAN[:10] + [
+    "....TbbbbbbT....",
+    "...TbNbbbbvTT...",
+    ".NNNNNNNNbbvS...",
+    "NnnnnnnnnNbvs...",
+    "NnWWWWnYnNbv....",
+    "NnWwwWnnnNUU....",
+    "NnnnnnnnnNUU....",
+    "NNNNNNNNNNUU....",
+    "....UUU..UUU....",
+    "...kkkk..kkkk...",
+]
+for k, v in dict(BIGBAG=BIGBAG, POSTMAN_BAG=POSTMAN_BAG, LETTER_1UP=LETTER_1UP, ONIGIRI=ONIGIRI, BOOTS=BOOTS, LANTERN=LANTERN, PLANE=PLANE).items():
     S[k] = spr(v)
 S['PARCEL'] = spr(PARCEL, outline=False)
 S['SCARF'] = scarf()
@@ -632,12 +656,14 @@ groups = [
                  ('PLANE', '紙ひこうきマント', '長押しで滑空'), ('INVINCIBLE', 'むてき中のすがた', '虹色に光る')]),
     ("ブロック", [('LETTERBLK', '手紙ブロック', 'アイテムが1つ出る'), ('PARCEL', '小包ブロック', '何回もたたける'),
               ('HIDDEN', 'かくしブロック', '見えない・1UPなど'), ('POSTMAN', '（大きさ比較）', '主人公')]),
+    ("守り（パワーアップと別に持てる）", [('BIGBAG', '大きな配達カバン', 'ダメージを1回防ぐ'),
+                          ('POSTMAN_BAG', 'カバンを持つすがた', 'カバンが大きくなる')]),
 ]
 cw, ch = 220, 230
 IS = 5   # すべて同じ倍率 → 実際の大きさの比率がわかる
 sheet = Image.new('RGB', (cw * 4 + 16, 70 + len(groups) * (ch + 40)), (22, 24, 44))
 sd = ImageDraw.Draw(sheet)
-sd.text((24, 22), "ミスターポストマン　アイテム見本（仮 v3・すべて同じ倍率）", font=F, fill=(255, 255, 255))
+sd.text((24, 22), "ミスターポストマン　アイテム見本（仮 v4・すべて同じ倍率）", font=F, fill=(255, 255, 255))
 y0 = 70
 for title, row in groups:
     sd.text((24, y0), "■ " + title, font=Fs, fill=(150, 200, 255))
@@ -654,7 +680,7 @@ for title, row in groups:
         big = im.resize((im.size[0] * IS, im.size[1] * IS), Image.NEAREST)
         sheet.paste(big, (cx + cw // 2 - big.size[0] // 2, cy + 14 + (124 - big.size[1]) // 2), big)
         sd.rounded_rectangle((cx + 16, cy + ch - 84, cx + cw - 16, cy + ch - 22), 12, fill=(20, 24, 48))
-        sd.text((cx + 28, cy + ch - 78), n, font=F if len(n) <= 7 else font(JP, 18), fill=(255, 255, 255))
+        sd.text((cx + 28, cy + ch - 78), n, font=F if len(n) <= 7 else font(JP, 17), fill=(255, 255, 255))
         sd.text((cx + 28, cy + ch - 48), desc, font=Fs, fill=(255, 226, 140))
     y0 += ch + 40
 sheet.save(f"{OUT}/sample_items.png")
