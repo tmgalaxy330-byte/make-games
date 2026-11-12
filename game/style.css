@@ -1,0 +1,94 @@
+:root {
+  --pill: rgba(20, 24, 48, .58);
+  --ink: #fff;
+  --sub: #bcd0ff;
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: #5c96fa;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+  color: var(--ink);
+}
+#game {
+  position: fixed; left: 0; top: 0;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}
+
+/* ---------- HUD ---------- */
+#hud {
+  position: fixed; left: calc(10px + var(--safe-l)); right: calc(10px + var(--safe-r)); top: 8px;
+  display: flex; gap: 8px; align-items: center; pointer-events: none;
+}
+#hud .spacer { flex: 1; }
+.pill {
+  display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px;
+  background: var(--pill); border-radius: 17px; font-size: 18px; border: 0; color: var(--ink);
+  backdrop-filter: blur(2px);
+}
+.pill small { font-size: 11px; color: var(--sub); font-weight: 700; letter-spacing: .04em; }
+.pill b { font-weight: 800; }
+#stamps { color: #ffec96; }
+#stamp-icon { width: 20px; height: 20px; image-rendering: pixelated; }
+.heart {
+  width: 18px; height: 16px; display: inline-block;
+  background: #e23034;
+  clip-path: path("M9 16 L1.5 8.5 A4.4 4.4 0 0 1 9 3 A4.4 4.4 0 0 1 16.5 8.5 Z");
+}
+.heart.empty { background: rgba(255,255,255,.25); }
+.pill.icon { pointer-events: auto; width: 48px; justify-content: center; gap: 5px; padding: 0; cursor: pointer; }
+.pill.icon i { width: 5px; height: 15px; background: #fff; border-radius: 2px; display: block; }
+
+/* ---------- touch pad ---------- */
+#pad { position: fixed; inset: 0; pointer-events: none; }
+.btn {
+  position: absolute; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.95); font-weight: 800;
+  border: 2.5px solid rgba(255,255,255,.75);
+  box-shadow: 0 5px 0 rgba(0,0,0,.18);
+  transition: transform .05s, background .05s;
+}
+.btn.on { transform: translateY(3px) scale(.96); box-shadow: 0 2px 0 rgba(0,0,0,.18); }
+.arrow { width: 74px; height: 74px; bottom: calc(18px + var(--safe-b)); background: rgba(255,255,255,.2); font-size: 26px; }
+.arrow.on { background: rgba(255,255,255,.45); }
+#btn-left  { left: calc(18px + var(--safe-l)); }
+#btn-right { left: calc(106px + var(--safe-l)); }
+.jump { width: 92px; height: 92px; right: calc(18px + var(--safe-r)); bottom: calc(26px + var(--safe-b)); background: rgba(255,136,72,.55); font-size: 18px; }
+.jump.on { background: rgba(255,136,72,.85); }
+.act  { width: 60px; height: 60px; right: calc(124px + var(--safe-r)); bottom: calc(16px + var(--safe-b)); background: rgba(70,160,255,.5); font-size: 14px; }
+.act.on { background: rgba(70,160,255,.8); }
+
+/* ---------- overlays ---------- */
+.overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(16, 20, 40, .55);
+}
+.overlay[hidden] { display: none; }
+.panel {
+  background: #1c2244; border-radius: 22px; padding: 22px 34px; text-align: center;
+  box-shadow: 0 10px 0 rgba(0,0,0,.25); min-width: 240px;
+}
+.panel h2 { margin: 0 0 14px; font-size: 24px; }
+.panel p { margin: 0 0 16px; color: var(--sub); }
+.panel p b { color: #ffec96; font-size: 22px; }
+.panel button {
+  display: block; width: 100%; margin: 8px 0 0; padding: 12px; border: 0; border-radius: 14px;
+  background: #ff8848; color: #fff; font-size: 18px; font-weight: 800; font-family: inherit;
+  box-shadow: 0 4px 0 #c4582a; cursor: pointer;
+}
+.panel button.sub { background: #3a4680; box-shadow: 0 4px 0 #262e5a; }
+
+#rotate { display: none; background: #1c2244; z-index: 10; }
+#rotate .phone {
+  width: 44px; height: 74px; margin: 0 auto 16px; border: 4px solid #fff; border-radius: 9px;
+  animation: turn 1.8s ease-in-out infinite;
+}
+@keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
+
+/* PC: keep the pad visible for preview, but smaller hint */
+@media (pointer: fine) { #pad { opacity: .85; } }

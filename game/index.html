@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#5c96fa">
+<title>ミスターポストマン</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="pill" id="hearts"><span class="heart"></span><span class="heart"></span><span class="heart"></span></div>
+  <div class="pill"><canvas id="stamp-icon" width="13" height="13"></canvas><b id="stamps">× 0</b></div>
+  <div class="spacer"></div>
+  <div class="pill"><small>WORLD</small><b>1-1</b></div>
+  <button class="pill icon" id="btn-pause" aria-label="一時停止"><i></i><i></i></button>
+</div>
+
+<div id="pad">
+  <div class="btn arrow" id="btn-left" data-key="left">◀</div>
+  <div class="btn arrow" id="btn-right" data-key="right">▶</div>
+  <div class="btn act" id="btn-act" data-key="act">ACT</div>
+  <div class="btn jump" id="btn-jump" data-key="jump">JUMP</div>
+</div>
+
+<div class="overlay" id="pause-menu" hidden>
+  <div class="panel">
+    <h2>いちじていし</h2>
+    <button id="btn-resume">つづける</button>
+    <button id="btn-restart" class="sub">さいしょから</button>
+  </div>
+</div>
+
+<div class="overlay" id="clear-menu" hidden>
+  <div class="panel">
+    <h2>配達完了！</h2>
+    <p>あつめた切手：<b id="clear-stamps">0</b> 枚</p>
+    <button id="btn-again">もういちど</button>
+  </div>
+</div>
+
+<div class="overlay" id="rotate">
+  <div class="panel">
+    <div class="phone"></div>
+    <h2>スマホを横にしてね</h2>
+  </div>
+</div>
+
+<script src="sprites.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
