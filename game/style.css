@@ -60,7 +60,11 @@ html, body {
 .jump { width: 92px; height: 92px; right: calc(18px + var(--safe-r)); bottom: calc(26px + var(--safe-b)); background: rgba(255,136,72,.55); font-size: 18px; }
 .jump.on { background: rgba(255,136,72,.85); }
 .dash { width: 72px; height: 72px; right: calc(118px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); background: rgba(70,160,255,.5); font-size: 15px; }
-.dash.on { background: rgba(70,160,255,.85); }
+.dash.on { transform: translateY(3px) scale(.96); }
+.dash.active {
+  background: rgba(40,150,255,.92); border-color: #fff; font-size: 13px; line-height: 1.1; text-align: center;
+  box-shadow: 0 5px 0 rgba(0,0,0,.18), 0 0 0 4px rgba(120,200,255,.55), 0 0 18px rgba(120,200,255,.9);
+}
 
 /* ---------- overlays ---------- */
 .overlay {

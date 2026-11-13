@@ -15,6 +15,7 @@
     accel: 700,       // 地上の加速
     decel: 900,       // 地上の減速
     air: 480,         // 空中の加速
+    airBrake: 1100,   // 空中で反対向きを押したときの減速
     jump: 318,        // ジャンプの初速 → 最大の高さ ≒ 318² / (2×900) ≒ 56ドット（約3.5マス）
     dashJump: 360,    // ダッシュ最高速でのジャンプ初速 → ≒ 72ドット（約4.5マス）
     gUp: 900,         // 上昇中（ボタンを押している間）の重力
@@ -192,7 +193,6 @@
   const HIT_PAD = 18;   // ボタンの反応範囲を見た目より広くする（px）
 
   // 1本の指で押しているボタンを返す。
-  // DASH と JUMP のあいだを押したときだけ、両方を同時に押したことにする（親指1本でダッシュジャンプ）
   function hitKeys(x, y) {
     const hits = [];
     for (const b of buttons) {
@@ -202,7 +202,6 @@
     }
     if (!hits.length) return [];
     const keys = hits.map(h => h.key);
-    if (keys.includes('jump') && keys.includes('dash')) return ['jump', 'dash'];
     hits.sort((a, b) => a.d - b.d);
     return [hits[0].key];
   }
@@ -234,9 +233,22 @@
   });
   addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (!k) return; keyKeys[k] = false; syncInput(); });
 
+  // DASH は切りかえ式：1回押すとON、もう1回押すとOFF
+  let dashMode = false, dashRawPrev = false;
+  const dashBtn = document.getElementById('btn-dash');
+  function setDash(on) {
+    dashMode = on;
+    dashBtn.classList.toggle('active', on);
+    dashBtn.textContent = on ? 'DASH ON' : 'DASH';
+  }
   function syncInput() {
-    for (const k in input) input[k] = touchKeys[k] || keyKeys[k];
-    for (const b of buttons) b.el.classList.toggle('on', input[b.key]);
+    const raw = {};
+    for (const k in input) raw[k] = touchKeys[k] || keyKeys[k];
+    if (raw.dash && !dashRawPrev) setDash(!dashMode);
+    dashRawPrev = raw.dash;
+    input.left = raw.left; input.right = raw.right; input.jump = raw.jump;
+    input.dash = dashMode;
+    for (const b of buttons) b.el.classList.toggle('on', raw[b.key]);
   }
 
   // ------------------------------------------------------------------ プレイヤー
@@ -258,7 +270,7 @@
     player.x = start.x; player.y = start.y + TILE - player.h;
     player.vx = player.vy = 0; player.face = 1; player.onGround = false;
     pocchi.x = player.x - 16; pocchi.y = player.y - 20;
-    stampCount = 0; updateStampHud();
+    stampCount = 0; updateStampHud(); setDash(false);
     camX = 0; particles.length = 0; bumps.length = 0;
     state = 'play';
     pauseMenu.hidden = true; clearMenu.hidden = true;
@@ -343,6 +355,8 @@
     let accel = player.onGround ? (dir ? PHYS.accel : PHYS.decel) : PHYS.air;
     // ダッシュをやめたときは、少しずつ歩く速さにもどす（急ブレーキにしない）
     if (dir && Math.abs(player.vx) > top && Math.sign(player.vx) === dir) accel = 260;
+    // 空中ブレーキ：空中で進む向きと反対を押すと強く減速できる（着地を合わせやすく）
+    if (!player.onGround && dir && player.vx && Math.sign(player.vx) === -dir) accel = PHYS.airBrake;
     player.vx = approach(player.vx, dir * top, accel * dt);
 
     // ---- ジャンプ（先行入力・コヨーテタイム）
