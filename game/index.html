@@ -18,6 +18,7 @@
   <div class="pill" id="hearts"><span class="heart"></span><span class="heart"></span><span class="heart"></span></div>
   <div class="pill"><canvas id="stamp-icon" width="13" height="13"></canvas><b id="stamps">× 0</b></div>
   <div class="pill"><small>のこり</small><b id="lives">× 3</b></div>
+  <div class="pill" id="gems-pill"><canvas id="gem-icons" width="32" height="7"></canvas></div>
   <div class="pill" hidden><canvas id="item-icons" width="34" height="16"></canvas></div>
   <div class="spacer"></div>
   <div class="pill"><small>WORLD</small><b id="world-label">1-1</b></div>
@@ -87,7 +88,7 @@
 
 <!-- ステージ選択 -->
 <div class="scene" id="map-screen" hidden>
-  <div class="map-head"><small>WORLD 1</small><b>はじまりの草原島</b></div>
+  <div class="map-head"><small>WORLD 1</small><b id="map-title">はじまりの草原島</b></div>
   <div class="map-track">
     <div class="map-line"></div>
     <div class="map-nodes" id="map-nodes"></div>

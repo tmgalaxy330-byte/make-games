@@ -55,84 +55,193 @@
   // ------------------------------------------------------------------ ステージ（1-1 試作）
   // '#'=地面 '='=板（下から通りぬけ可） 'B'=手紙ブロック 'P'=小包ブロック
   // 'H'=かくしブロック（見えない） 'U'=空ブロック '*'=ハート切手
-  const LEVEL_W = 150;
+  let LEVEL_W = 150;
   const level = [];
   const contents = {};      // "x,y" → ブロックの中身
   const parcelHits = {};
+  const gemSpots = {};      // "x,y" → ヒカリのかけらの番号（0〜2）
   let enemies = [];
-  let goal = { x: 134 * TILE, y: 10 * TILE - 20, w: 16, h: 20 };
-  const START = { x: 3 * TILE, y: 10 * TILE };
-  const CHECKPOINT = { x: 60 * TILE, y: 10 * TILE };
+  let movers = [];          // 動く足場
+  let boss = null;
+  let goal = null;
+  let START = { x: 3 * TILE, y: 10 * TILE };
+  let CHECKPOINT = null;
+  let theme = null;
 
-  function buildLevel() {
+  // ステージを組み立てる道具
+  function makeBuilder() {
+    const set = (x, y, c) => { if (x >= 0 && x < LEVEL_W && y >= 0 && y < ROWS) level[y][x] = c; };
+    return {
+      set,
+      ground: (x0, x1, top = 10) => { for (let x = x0; x <= x1; x++) for (let y = top; y < ROWS; y++) set(x, y, '#'); },
+      plank: (x0, x1, y) => { for (let x = x0; x <= x1; x++) set(x, y, '='); },
+      stamps: (x0, x1, y) => { for (let x = x0; x <= x1; x++) set(x, y, '*'); },
+      block: (x, y, item = 'stamp', kind = 'B') => { set(x, y, kind); contents[x + ',' + y] = item; },
+      pillar: (x, h) => { for (let y = 10 - h; y <= 9; y++) set(x, y, '#'); },
+      gem: (x, y, n) => { set(x, y, 'K'); gemSpots[x + ',' + y] = n; },
+      // row = 敵の足もとの行（ふつうは地面の10）。パタクモは空中を上下に飛ぶ
+      enemy: (kind, x, row = 10) => enemies.push({
+        kind, x: x * TILE + 2, y: row * TILE - 14, baseY: row * TILE - 14, w: 12, h: kind === 'pata' ? 10 : 14,
+        vx: kind === 'pata' ? -18 : -22, vy: 0, active: false, dead: null, deadT: 0, onGround: false, t: x,
+      }),
+      // 左右に動く板：x0（左はし）, row, 幅（マス）, 動く幅（マス）, 速さ
+      mover: (x0, row, wTiles, range, speed) => movers.push({
+        x: x0 * TILE, y: row * TILE, w: wTiles * TILE, h: 6, x0: x0 * TILE, range: range * TILE, speed, t: 0, dx: 0,
+      }),
+      wallEnd: () => { for (let y = 0; y < 10; y++) set(LEVEL_W - 1, y, '#'); },
+    };
+  }
+
+  const THEMES = {
+    meadow: { sky: [[92, 150, 250], [196, 228, 255]], mtn: ['#96baec', '#70a6ce'], hill: ['#54ac60', '#8cd678'] },
+    forest: { sky: [[78, 136, 214], [168, 214, 236]], mtn: ['#7fb0c8', '#4f8f7e'], hill: ['#2f7f4a', '#5ab86a'], trees: true },
+    sunset: { sky: [[236, 128, 124], [255, 214, 150]], mtn: ['#c48aa8', '#9a6a94'], hill: ['#5a9a5a', '#8cc878'], lighthouse: true },
+    storm: { sky: [[64, 56, 104], [146, 128, 168]], mtn: ['#5a5280', '#463e6a'], hill: ['#3e5a4a', '#5a7a62'], noSun: true },
+  };
+
+  const LEVEL_DEFS = {
+    // ---------------- 1-1 はじまりの草原
+    '1-1': { w: 150, theme: 'meadow', checkpoint: 60, goal: 134, build(B) {
+      B.ground(0, 30);
+      B.stamps(6, 9, 8);
+      B.block(13, 6); B.block(14, 6, 'boots'); B.block(15, 6, 'stamp', 'P'); B.block(16, 6);
+      B.enemy('moyan', 20);
+      B.plank(22, 26, 7); B.stamps(23, 25, 5); B.gem(24, 3, 0);
+      B.enemy('moyan', 28);
+      B.ground(34, 62);
+      B.block(37, 6, 'plane');
+      B.pillar(40, 1); B.pillar(41, 2); B.pillar(42, 3);
+      B.stamps(40, 42, 5);
+      B.enemy('toge', 45);
+      B.plank(47, 51, 7); B.block(49, 3, 'bag');
+      B.plank(53, 56, 5); B.stamps(53, 56, 3); B.gem(56, 1, 1);
+      B.enemy('moyan', 57); B.enemy('moyan', 59);
+      B.plank(64, 65, 8); B.stamps(64, 65, 6);
+      B.ground(68, 100);
+      B.pillar(74, 2);
+      B.enemy('toge', 77);
+      B.pillar(80, 3);
+      B.enemy('moyan', 83);
+      B.pillar(85, 2); B.pillar(86, 4);
+      B.stamps(76, 78, 6); B.stamps(82, 84, 5);
+      B.block(92, 6, 'onigiri'); B.block(93, 6, 'lantern'); B.block(94, 6);
+      B.enemy('moyan', 96);
+      B.block(97, 6, 'oneup', 'H');
+      B.enemy('moyan', 99);
+      B.ground(104, LEVEL_W - 1);
+      B.block(106, 6, 'scarf');
+      B.enemy('moyan', 108); B.enemy('toge', 109); B.enemy('moyan', 110);
+      for (let i = 0; i < 4; i++) B.pillar(112 + i, i + 1);
+      B.gem(115, 3, 2);
+      B.stamps(118, 122, 8);
+      B.enemy('moyan', 122); B.enemy('moyan', 125); B.enemy('toge', 128);
+      B.wallEnd();
+    } },
+
+    // ---------------- 1-2 森のこみち（パタクモ登場）
+    '1-2': { w: 160, theme: 'forest', checkpoint: 62, goal: 146, build(B) {
+      B.ground(0, 24);
+      B.stamps(5, 8, 8);
+      B.block(10, 6); B.block(11, 6, 'boots'); B.block(12, 6);
+      B.enemy('moyan', 16);
+      B.plank(18, 22, 7); B.gem(20, 4, 0); B.enemy('pata', 21, 6);
+      B.ground(28, 60);
+      B.pillar(32, 2); B.enemy('toge', 35); B.pillar(38, 3);
+      B.enemy('pata', 41, 7);
+      B.plank(43, 47, 7); B.stamps(43, 47, 5);
+      B.plank(49, 53, 5); B.stamps(49, 53, 3);
+      B.block(51, 1, 'stamp', 'P');
+      B.enemy('moyan', 55); B.enemy('moyan', 57);
+      B.plank(62, 63, 8); B.stamps(62, 63, 6);
+      B.ground(65, 100);
+      B.pillar(70, 2); B.pillar(71, 3);
+      B.enemy('pata', 75, 6);
+      B.block(76, 6); B.block(77, 6, 'plane'); B.block(78, 6);
+      B.enemy('pata', 80, 7); B.enemy('moyan', 82);
+      B.pillar(85, 2); B.pillar(86, 4); B.gem(86, 2, 1);
+      B.enemy('toge', 90); B.enemy('moyan', 94);
+      B.block(97, 6, 'oneup', 'H');
+      B.ground(104, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(110 + i, i + 1);
+      B.plank(116, 121, 6); B.stamps(116, 121, 4); B.gem(121, 2, 2);
+      B.enemy('moyan', 125); B.enemy('pata', 128, 7); B.enemy('toge', 131);
+      B.enemy('moyan', 136);
+      B.wallEnd();
+    } },
+
+    // ---------------- 1-3 丘の上の灯台（動く足場）
+    '1-3': { w: 170, theme: 'sunset', checkpoint: 66, goal: 156, build(B) {
+      B.ground(0, 20);
+      B.stamps(4, 7, 8);
+      B.block(9, 6, 'bag');
+      B.enemy('moyan', 14);
+      B.mover(21, 8, 3, 2, 1.1); B.stamps(22, 25, 6);
+      B.ground(26, 56);
+      B.pillar(30, 2); B.pillar(31, 3);
+      B.enemy('pata', 36, 6); B.enemy('toge', 40);
+      B.block(44, 6); B.block(45, 6, 'onigiri'); B.block(46, 6);
+      B.gem(45, 3, 0);
+      B.enemy('moyan', 48); B.enemy('moyan', 50);
+      B.mover(57, 8, 3, 2, 1.3); B.stamps(58, 61, 6);
+      B.ground(62, 108);
+      B.enemy('toge', 70); B.enemy('pata', 74, 6);
+      B.enemy('moyan', 78); B.enemy('moyan', 80); B.enemy('moyan', 82);
+      B.block(85, 6, 'scarf');
+      B.pillar(90, 2); B.pillar(91, 4); B.pillar(92, 2); B.gem(91, 3, 1);
+      B.enemy('moyan', 96); B.enemy('pata', 100, 6);
+      B.block(104, 6, 'oneup', 'H');
+      B.mover(109, 8, 3, 2, 1.5);
+      B.ground(114, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(120 + i, i + 1);
+      for (let x = 124; x <= 127; x++) B.pillar(x, 4);
+      B.gem(126, 3, 2); B.stamps(124, 127, 4);
+      B.enemy('moyan', 134); B.enemy('toge', 138); B.enemy('pata', 142, 6);
+      B.wallEnd();
+    } },
+
+    // ---------------- ボス：大ガエル ゲコドン
+    '1-B': { w: 28, theme: 'storm', checkpoint: null, goal: null, build(B) {
+      B.ground(0, 27);
+      for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
+      B.plank(5, 7, 6); B.plank(20, 22, 6);
+      boss = {
+        x: 20 * TILE, y: 10 * TILE - 24, w: 26, h: 24, vx: 0, vy: 0, hp: 3, maxHp: 3,
+        mode: 'idle', t: 0, hurtT: 0, face: -1, onGround: true, dead: false, deadT: 0, squash: 0,
+      };
+    } },
+  };
+
+  function buildLevel(idOverride) {
+    const id = idOverride || STAGES[stageIndex].id;
+    const def = LEVEL_DEFS[id];
+    LEVEL_W = def.w;
     level.length = 0;
     for (const k in contents) delete contents[k];
     for (const k in parcelHits) delete parcelHits[k];
-    enemies = [];
+    for (const k in gemSpots) delete gemSpots[k];
+    enemies = []; movers = []; boss = null; shockwaves = []; bigGem = null;
     for (let r = 0; r < ROWS; r++) level.push(new Array(LEVEL_W).fill('.'));
-    const set = (x, y, c) => { if (x >= 0 && x < LEVEL_W && y >= 0 && y < ROWS) level[y][x] = c; };
-    const ground = (x0, x1, top = 10) => { for (let x = x0; x <= x1; x++) for (let y = top; y < ROWS; y++) set(x, y, '#'); };
-    const plank = (x0, x1, y) => { for (let x = x0; x <= x1; x++) set(x, y, '='); };
-    const stamps = (x0, x1, y) => { for (let x = x0; x <= x1; x++) set(x, y, '*'); };
-    const block = (x, y, item = 'stamp', kind = 'B') => { set(x, y, kind); contents[x + ',' + y] = item; };
-    const pillar = (x, h) => { for (let y = 10 - h; y <= 9; y++) set(x, y, '#'); };
-    const enemy = (kind, x) => enemies.push({
-      kind, x: x * TILE + 2, y: 10 * TILE - 14, w: 12, h: 14, vx: -22, vy: 0,
-      active: false, dead: null, deadT: 0, onGround: false,
-    });
-
-    // --- はじまり
-    ground(0, 30);
-    stamps(6, 9, 8);
-    block(13, 6); block(14, 6, 'boots'); block(15, 6, 'stamp', 'P'); block(16, 6);
-    enemy('moyan', 20);
-    plank(22, 26, 7); stamps(23, 25, 5);
-    enemy('moyan', 28);
-    // 穴（3マス）
-    ground(34, 62);
-    block(37, 6, 'plane');
-    pillar(40, 1); pillar(41, 2); pillar(42, 3);
-    stamps(40, 42, 5);
-    enemy('toge', 45);
-    plank(47, 51, 7); block(49, 3, 'bag');
-    plank(53, 56, 5); stamps(53, 56, 3);
-    enemy('moyan', 57); enemy('moyan', 59);
-    // 中間ポスト（x=60）のあと、穴（まん中に板）
-    plank(64, 65, 8); stamps(64, 65, 6);
-    ground(68, 100);
-    pillar(74, 2);
-    enemy('toge', 77);
-    pillar(80, 3);
-    enemy('moyan', 83);
-    pillar(85, 2); pillar(86, 4);
-    stamps(76, 78, 6); stamps(82, 84, 5);
-    block(92, 6, 'onigiri'); block(93, 6, 'lantern'); block(94, 6);
-    enemy('moyan', 96);
-    block(97, 6, 'oneup', 'H');                     // かくしブロック
-    enemy('moyan', 99);
-    // 穴（3マス）
-    ground(104, LEVEL_W - 1);
-    block(106, 6, 'scarf');
-    enemy('moyan', 108); enemy('toge', 109); enemy('moyan', 110);
-    for (let i = 0; i < 4; i++) pillar(112 + i, i + 1);
-    stamps(118, 122, 8);
-    enemy('moyan', 122); enemy('moyan', 125); enemy('toge', 128);
-    goal = { x: 134 * TILE, y: 10 * TILE - 20, w: 16, h: 20 };
-    for (let y = 0; y < 10; y++) set(LEVEL_W - 1, y, '#');   // 右はしの壁
+    START = { x: 3 * TILE, y: 10 * TILE };
+    CHECKPOINT = def.checkpoint ? { x: def.checkpoint * TILE, y: 10 * TILE } : null;
+    goal = def.goal ? { x: def.goal * TILE, y: 10 * TILE - 20, w: 16, h: 20 } : null;
+    const newTheme = THEMES[def.theme];
+    if (theme !== newTheme) { theme = newTheme; if (sky) makeSky(); }
+    def.build(makeBuilder());
+    // すでに取ったかけらは、半とうめいで表示（もう一度取れる）
   }
 
   // ワールド1のステージ一覧（playable=false は準備中）
   const STAGES = [
     { id: '1-1', label: '1-1', playable: true },
-    { id: '1-2', label: '1-2', playable: false },
-    { id: '1-3', label: '1-3', playable: false },
-    { id: '1-B', label: 'BOSS', playable: false, boss: true },
+    { id: '1-2', label: '1-2', playable: true },
+    { id: '1-3', label: '1-3', playable: true },
+    { id: '1-B', label: 'BOSS', playable: true, boss: true },
   ];
   let stageIndex = 0;
 
   // ------------------------------------------------------------------ セーブ（この端末のブラウザに保存）
   const SAVE_KEY = 'mister-postman-save-v1';
-  const emptySave = () => ({ cleared: {}, best: {}, last: 0, prologue: false });
+  const emptySave = () => ({ cleared: {}, best: {}, gems: {}, last: 0, prologue: false, chapter1: false });
   let save = emptySave();
   function loadSave() {
     try {
@@ -182,7 +291,8 @@
     sky.width = 1; sky.height = viewH;
     const g = sky.getContext('2d');
     for (let y = 0; y < viewH; y += 6) {           // 段々のグラデーション（ドット絵らしく）
-      g.fillStyle = mix([92, 150, 250], [196, 228, 255], y / viewH);
+      const T = theme || THEMES.meadow;
+      g.fillStyle = mix(T.sky[0], T.sky[1], y / viewH);
       g.fillRect(0, y, 1, 6);
     }
   }
@@ -346,6 +456,7 @@
   const run = {
     hearts: RULE.hearts, lives: RULE.lives, stamps: 0,
     power: null, bag: false, invT: 0, hurtT: 0, checkpoint: false,
+    gems: [false, false, false],
   };
   let items = [];           // ブロックから出たアイテム
   let balls = [];           // ランタンの光の玉
@@ -376,7 +487,7 @@
   // マップからステージに入る（stamps はステージごとに数える）
   function enterStage(i) {
     stageIndex = i;
-    run.stamps = 0; run.checkpoint = false;
+    run.stamps = 0; run.checkpoint = false; run.gems = [false, false, false];
     run.hearts = RULE.hearts; run.invT = 0; run.hurtT = 0;
     setDash(false);
     document.getElementById('world-label').textContent = STAGES[i].label;
@@ -426,6 +537,7 @@
     }
     run.lives--;
     run.hearts = RULE.hearts; run.power = null; run.bag = false; run.invT = 0; run.hurtT = 0;
+    if (!run.checkpoint) run.gems = [false, false, false];
     fadeT = 0.5;
     startLevel();
   }
@@ -539,9 +651,16 @@
         if (e.dead === 'fall') { e.vy += PHYS.gDown * dt; e.x += e.vx * dt; e.y += e.vy * dt; }
         continue;
       }
-      if (moveBody(e, dt)) e.vx = -e.vx;
+      if (e.kind === 'pata') {
+        // パタクモ：ゆっくり左右に進みながら、ふわふわ上下する
+        e.t += dt;
+        e.x += e.vx * dt;
+        e.y = e.baseY + Math.sin(e.t * 2.2) * 18;
+        const ahead = e.vx > 0 ? Math.floor((e.x + e.w) / TILE) : Math.floor(e.x / TILE);
+        if (isSolid(tileAt(ahead, Math.floor((e.y + 5) / TILE)))) e.vx = -e.vx;
+      } else if (moveBody(e, dt)) e.vx = -e.vx;
       // 足場のはしで引き返す（小学生でも読みやすい動き）
-      if (e.onGround) {
+      if (e.kind !== 'pata' && e.onGround) {
         const fx = e.vx > 0 ? Math.floor((e.x + e.w + 1) / TILE) : Math.floor((e.x - 1) / TILE);
         const fy = Math.floor((e.y + e.h + 1) / TILE);
         const c = tileAt(fx, fy);
@@ -553,7 +672,7 @@
       if (state !== 'play' || !overlap(player, e)) continue;
       if (run.invT > 0) { killEnemy(e, 'fall'); continue; }
       const fromAbove = player.vy > 0 && player.prevBottom <= e.y + 6;
-      if (e.kind === 'moyan' && fromAbove) {
+      if ((e.kind === 'moyan' || e.kind === 'pata') && fromAbove) {
         killEnemy(e, 'squash');
         player.y = e.y - player.h;
         player.vy = -(input.jump ? PHYS.stompHigh : PHYS.stomp);
@@ -656,27 +775,55 @@
       balls.push({ x: player.x + player.w / 2 + player.face * 6 - 3, y: player.y + 6, w: 6, h: 6, vx: player.face * 170, vy: 40, t: 0 });
     }
 
+    // ---- 動く足場（乗っていたら一緒に動く）
+    for (const m of movers) {
+      m.t += dt;
+      const nx = m.x0 + (Math.sin(m.t * m.speed - Math.PI / 2) + 1) / 2 * m.range;
+      m.dx = nx - m.x; m.x = nx;
+      if (player.onMover === m) player.x += m.dx;
+    }
+    player.onMover = null;
+
     // ---- 移動と当たり判定
     player.x += player.vx * dt; collideX();
     const prevTop = player.y;
     player.prevBottom = player.y + player.h;
     player.y += player.vy * dt; collideY(prevTop, player.prevBottom);
+    if (player.vy >= 0) {
+      for (const m of movers) {
+        if (player.x + player.w > m.x && player.x < m.x + m.w &&
+            player.prevBottom <= m.y + 1 && player.y + player.h >= m.y) {
+          player.y = m.y - player.h; player.vy = 0; player.onGround = true; player.onMover = m;
+        }
+      }
+    }
 
     // ---- 切手を拾う
     const l = Math.floor(player.x / TILE), r = Math.floor((player.x + player.w - 1) / TILE);
     const t = Math.floor(player.y / TILE), b = Math.floor((player.y + player.h - 1) / TILE);
     for (let ty = t; ty <= b; ty++) for (let tx = l; tx <= r; tx++) {
-      if (tileAt(tx, ty) === '*') { level[ty][tx] = '.'; addStamps(1, tx * TILE + 2, ty * TILE + 2); }
+      const tc = tileAt(tx, ty);
+      if (tc === '*') { level[ty][tx] = '.'; addStamps(1, tx * TILE + 2, ty * TILE + 2); }
+      else if (tc === 'K') {
+        level[ty][tx] = '.';
+        run.gems[gemSpots[tx + ',' + ty]] = true;
+        popText('ヒカリのかけら！', '#9ef0ff');
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          particles.push({ kind: 'spark', x: tx * TILE + 8, y: ty * TILE + 8, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, t: 0, life: 0.4 });
+        }
+        updateHud();
+      }
     }
 
     // ---- 穴に落ちた
     if (player.y > ROWS * TILE + 24) { run.hearts = 0; updateHud(); miss(); }
 
     // ---- 中間ポスト
-    if (!run.checkpoint && player.x > CHECKPOINT.x) { run.checkpoint = true; popText('中間ポスト！', '#ffec96'); }
+    if (CHECKPOINT && !run.checkpoint && player.x > CHECKPOINT.x) { run.checkpoint = true; popText('中間ポスト！', '#ffec96'); }
 
     // ---- ゴール
-    if (player.x + player.w > goal.x + 2 && player.x < goal.x + goal.w - 2 && player.y + player.h > goal.y) {
+    if (goal && player.x + player.w > goal.x + 2 && player.x < goal.x + goal.w - 2 && player.y + player.h > goal.y) {
       startGoal();
     }
 
@@ -726,14 +873,18 @@
     const id = STAGES[stageIndex].id;
     save.cleared[id] = true;
     save.best[id] = Math.max(save.best[id] || 0, run.stamps);
+    const old = save.gems[id] || [false, false, false];
+    save.gems[id] = old.map((g, i) => g || run.gems[i]);
     save.last = Math.min(stageIndex + 1, STAGES.length - 1);
     writeSave();
     player.vx = 0; player.face = 1;
-    player.x = Math.min(player.x, goal.x - player.w - 1);    // ポストの横に立つ
+    if (goal) player.x = Math.min(player.x, goal.x - player.w - 1);    // ポストの横に立つ
     run.invT = 0; run.hurtT = 0;
     document.body.classList.add('cutscene');
-    particles.push({ kind: 'letter', sx: player.x + player.w / 2, sy: player.y + 6,
-      ex: goal.x + 7, ey: goal.y + 3, x: 0, y: 0, t: 0, life: GOAL.letter });
+    if (goal) {
+      particles.push({ kind: 'letter', sx: player.x + player.w / 2, sy: player.y + 6,
+        ex: goal.x + 7, ey: goal.y + 3, x: 0, y: 0, t: 0, life: GOAL.letter });
+    } else burst(player.x + player.w / 2, player.y - 10);
   }
 
   function burst(x, y) {
@@ -754,6 +905,8 @@
     player.vy = Math.min(player.vy + PHYS.gDown * dt, PHYS.maxFall);
     player.y += player.vy * dt;
     const floor = 10 * TILE;
+    // 足もとの高さ（ボス戦では板の上のこともある）
+
     if (player.y + player.h >= floor) { player.y = floor - player.h; player.vy = 0; player.onGround = true; } else player.onGround = false;
     if (player.onGround && goalT > GOAL.letter + 0.2 && goalT < GOAL.irisStart) player.vy = -190;
     // 花火（打ち上げ → 開く）
@@ -767,6 +920,14 @@
     pocchi.x = lerp(pocchi.x, player.x - 14 + Math.cos(pocchi.t) * 14, Math.min(1, dt * 6));
     pocchi.y = lerp(pocchi.y, player.y - 20 + Math.sin(pocchi.t) * 8, Math.min(1, dt * 6));
     updateParticles(dt);
+    if (goalT >= GOAL.irisEnd + 0.25 && state === 'goal' && STAGES[stageIndex].boss) {
+      state = 'chapter';
+      const firstTime = !save.chapter1;
+      save.chapter1 = true; writeSave();
+      if (firstTime) playDialog(CHAPTER1_END, () => enterMap(3), true);
+      else enterMap(stageIndex);
+      return;
+    }
     if (goalT >= GOAL.irisEnd + 0.25 && state === 'goal') {
       state = 'clear';
       document.getElementById('clear-stamps').textContent = run.stamps;
@@ -778,7 +939,7 @@
     if (state !== 'goal' && state !== 'clear') return;
     const p = Math.max(0, Math.min(1, (goalT - GOAL.rainbow) / 1.2));
     if (p <= 0) return;
-    const cxr = goal.x + 8 - camX, cyr = 10 * TILE - camY;
+    const cxr = (goal ? goal.x + 8 : player.x + 40) - camX, cyr = 10 * TILE - camY;
     const cols = ['#ff5a5a', '#ffaa3c', '#ffe650', '#6edc5a', '#5aa0ff', '#be6eff'];
     ctx.save();
     ctx.globalAlpha = 0.75;
@@ -818,6 +979,7 @@
     updatePlayer(dt);
     if (state !== 'play') return;
     updateEnemies(dt);
+    updateBoss(dt);
     updateItems(dt);
     updateBalls(dt);
 
@@ -909,7 +1071,170 @@
     }
   }
 
+  // 森の木（奥の列）
+  function drawForest(cx, groundY) {
+    const par = 0.6, step = 40;
+    const off = cx * par;
+    for (let i = Math.floor(off / step) - 1; i * step - off < viewW + step; i++) {
+      const x = Math.round(i * step - off + ((i * 37) % 17));
+      const h = 26 + ((i * 53) % 14);
+      ctx.fillStyle = '#4a3420'; ctx.fillRect(x + 6, groundY - h + 10, 4, h - 10);
+      ctx.fillStyle = '#1f5e3a'; ctx.beginPath(); ctx.arc(x + 8, groundY - h + 8, 12, 0, 7); ctx.fill();
+      ctx.fillStyle = '#2f7f4a'; ctx.beginPath(); ctx.arc(x + 6, groundY - h + 5, 8, 0, 7); ctx.fill();
+    }
+  }
+
+  // 灯台（1-3のゴールの先）。ワールド1をクリアすると光る
+  function drawLighthouse(x, groundY) {
+    x = Math.round(x);
+    const lit = save.chapter1;
+    for (let i = 0; i < 64; i++) {
+      const w = Math.round(lerp(14, 22, i / 63));
+      const stripe = Math.floor(i / 10) % 2 === 1;
+      ctx.fillStyle = stripe ? '#e23034' : '#f4f0e8';
+      ctx.fillRect(x - Math.floor(w / 2), groundY - 64 + i, w, 1);
+    }
+    ctx.fillStyle = '#281c34'; ctx.fillRect(x - 10, groundY - 66, 20, 3);
+    ctx.fillStyle = lit ? '#fff4aa' : '#8a8ca0'; ctx.fillRect(x - 6, groundY - 76, 12, 10);
+    ctx.fillStyle = '#281c34'; ctx.fillRect(x - 8, groundY - 80, 16, 4); ctx.fillRect(x - 1, groundY - 84, 2, 4);
+    if (lit) {
+      ctx.fillStyle = 'rgba(255,244,170,.25)';
+      ctx.beginPath(); ctx.moveTo(x, groundY - 71); ctx.lineTo(x - 120, groundY - 100); ctx.lineTo(x - 120, groundY - 50); ctx.fill();
+    }
+  }
+
+  // ------------------------------------------------------------------ ボス：ゲコドン
+  // ぴょーんと跳んで、着地すると地面を走る「ゆれ」を出す。上から3回ふむと勝ち
+  let shockwaves = [];
+  let bigGem = null;
+  let shake = 0;
+  function updateBoss(dt) {
+    if (!boss) { updateBigGem(dt); return; }
+    const b = boss;
+    if (b.hurtT > 0) b.hurtT -= dt;
+    if (b.dead) {
+      b.deadT += dt; b.vy += PHYS.gDown * dt; b.y += b.vy * dt;
+      if (b.deadT > 1.2 && !bigGem) {
+        bigGem = { x: LEVEL_W * TILE / 2 - 6, y: 20, vy: 0, w: 12, h: 11, landed: false };
+      }
+      updateBigGem(dt);
+      return;
+    }
+    if (!b.active) { if (player.x > 6 * TILE) b.active = true; else return; }
+    const speedUp = (b.maxHp - b.hp) * 0.25;
+    b.t += dt;
+    if (b.mode === 'idle') {
+      b.face = player.x < b.x ? -1 : 1;
+      if (b.t > 1.1 - speedUp) { b.mode = 'crouch'; b.t = 0; }
+    } else if (b.mode === 'crouch') {
+      b.squash = Math.min(1, b.t / 0.3);
+      if (b.t > 0.35) {
+        b.mode = 'air'; b.t = 0; b.squash = 0;
+        b.vy = -340;
+        b.vx = Math.max(-130, Math.min(130, (player.x - b.x) * 1.1));
+      }
+    }
+    const wasAir = b.mode === 'air';
+    moveBody(b, dt);
+    if (wasAir && b.onGround && b.t > 0.1) {
+      b.mode = 'idle'; b.t = 0; b.vx = 0; shake = 0.3;
+      for (const dir of [-1, 1]) {
+        shockwaves.push({ x: b.x + b.w / 2, dir, speed: 120 + speedUp * 60, t: 0, y: b.y + b.h });
+      }
+    }
+    if (b.onGround && b.mode !== 'air') b.vx = 0;
+
+    // 主人公とのふれあい
+    if (state === 'play' && overlap(player, b)) {
+      const fromAbove = player.vy > 0 && player.prevBottom <= b.y + 10;
+      if (fromAbove) {
+        if (b.hurtT <= 0) hitBoss(1, true);
+        else { player.vy = -200; player.y = b.y - player.h; }       // ダメージ直後は、はね返るだけ
+      } else if (run.invT > 0) { if (b.hurtT <= 0) hitBoss(1, false); }
+      else damage();
+    }
+    // 光の玉
+    for (const ball of balls) {
+      if (!ball.done && overlap(ball, b) && b.hurtT <= 0) { ball.done = true; hitBoss(1 / 3, false); }
+    }
+    // 地面のゆれ
+    for (const w of shockwaves) {
+      w.t += dt; w.x += w.dir * w.speed * dt;
+      if (state === 'play' && player.onGround && Math.abs(player.y + player.h - w.y) < 4 &&
+          Math.abs(player.x + player.w / 2 - w.x) < 8) damage();
+    }
+    shockwaves = shockwaves.filter(w => w.t < 2.2 && w.x > TILE && w.x < (LEVEL_W - 1) * TILE);
+    if (shake > 0) shake -= dt;
+  }
+
+  function hitBoss(amount, stomped) {
+    const b = boss;
+    b.hp = Math.max(0, b.hp - amount);
+    b.hurtT = stomped ? 1.0 : 0.25;
+    if (stomped) {
+      player.vy = -PHYS.stompHigh; player.jumping = input.jump; player.usedDouble = false;
+      player.y = b.y - player.h;
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      particles.push({ kind: 'spark', x: b.x + b.w / 2, y: b.y + 6, vx: Math.cos(a) * 80, vy: Math.sin(a) * 80, t: 0, life: 0.35 });
+    }
+    if (b.hp <= 0.001) {
+      b.dead = true; b.deadT = 0; b.vy = -200; shockwaves = [];
+      popText('やった！', '#ffec96');
+    }
+  }
+
+  // ボスをたおすと出る、大きなヒカリのかけら
+  function updateBigGem(dt) {
+    const g = bigGem;
+    if (!g || g.taken) return;
+    if (!g.landed) {
+      g.vy = Math.min(g.vy + 300 * dt, 120); g.y += g.vy * dt;
+      if (g.y + g.h >= 10 * TILE - 8) { g.y = 10 * TILE - 8 - g.h; g.landed = true; }
+    }
+    if (state === 'play' && overlap(player, g)) { g.taken = true; boss = null; startGoal(); }
+  }
+
+  function drawBoss(camY, cx) {
+    // ゆれ
+    for (const w of shockwaves) {
+      const x = Math.round(w.x - cx), y = Math.round(w.y - camY);
+      ctx.fillStyle = 'rgba(255,236,150,.9)';
+      ctx.fillRect(x - 3, y - 6, 6, 6);
+      ctx.fillStyle = 'rgba(200,140,60,.9)';
+      ctx.fillRect(x - 5, y - 3, 10, 3);
+    }
+    if (bigGem && !bigGem.taken) {
+      const gx = Math.round(bigGem.x - cx), gy = Math.round(bigGem.y - camY + Math.sin(time * 3) * 2);
+      ctx.fillStyle = 'rgba(158,240,255,.35)'; ctx.beginPath(); ctx.arc(gx + 6, gy + 6, 14, 0, 7); ctx.fill();
+      ctx.drawImage(SPR.BIGGEM, gx, gy);
+    }
+    const b = boss;
+    if (!b) return;
+    if (b.hurtT > 0 && Math.floor(time * 20) % 2 === 0 && !b.dead) return;
+    const img = SPR['GEKO' + (b.face > 0 ? '_L' : '')];
+    const sq = b.squash * 0.25, st = b.mode === 'air' ? 0.12 : 0;
+    const w = Math.round(img.width * (1 + sq - st)), h = Math.round(img.height * (1 - sq + st));
+    const x = Math.round(b.x + b.w / 2 - w / 2 - cx), y = Math.round(b.y + b.h - h - camY);
+    if (b.dead) {
+      ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(1, -1); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+    } else ctx.drawImage(img, x, y, w, h);
+    // HP（画面上のまん中）
+    if (!b.dead) {
+      const n = b.maxHp, bw = 18;
+      const sx = Math.round(viewW / 2 - (n * (bw + 3)) / 2);
+      for (let i = 0; i < n; i++) {
+        const fill = Math.max(0, Math.min(1, b.hp - i));
+        ctx.fillStyle = '#281c34'; ctx.fillRect(sx + i * (bw + 3) - 1, 33, bw + 2, 7);
+        ctx.fillStyle = '#5a4a78'; ctx.fillRect(sx + i * (bw + 3), 34, bw, 5);
+        ctx.fillStyle = '#6ed246'; ctx.fillRect(sx + i * (bw + 3), 34, Math.round(bw * fill), 5);
+      }
+    }
+  }
+
   function drawCheckpoint(camY) {
+    if (!CHECKPOINT) return;
     const x = Math.round(CHECKPOINT.x - camX), y = CHECKPOINT.y - camY;
     ctx.fillStyle = '#646474'; ctx.fillRect(x, y - 28, 2, 28);
     ctx.fillStyle = '#9696a2'; ctx.fillRect(x, y - 28, 1, 28);
@@ -928,14 +1253,17 @@
 
   function draw() {
     // 地面の上面を、下のボタンより上（画面下から約46ドット）に置く
-    const camY = 10 * TILE - (viewH - 46);
+    const camY = 10 * TILE - (viewH - 46) + (shake > 0 ? Math.round(Math.sin(time * 80) * 2) : 0);
     const cx = Math.round(camX);
     ctx.drawImage(sky, 0, 0, viewW, viewH);
 
     // 太陽
-    ctx.fillStyle = 'rgba(255,246,200,.25)'; ctx.beginPath(); ctx.arc(viewW - 60, 44, 24, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(255,246,200,.4)'; ctx.beginPath(); ctx.arc(viewW - 60, 44, 16, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff6c8'; ctx.beginPath(); ctx.arc(viewW - 60, 44, 10, 0, 7); ctx.fill();
+    if (!theme.noSun) {
+      const sy = theme.lighthouse ? viewH - 90 : 44;      // 夕日は低い位置
+      ctx.fillStyle = 'rgba(255,246,200,.25)'; ctx.beginPath(); ctx.arc(viewW - 60, sy, 24, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,246,200,.4)'; ctx.beginPath(); ctx.arc(viewW - 60, sy, 16, 0, 7); ctx.fill();
+      ctx.fillStyle = theme.lighthouse ? '#fff0b0' : '#fff6c8'; ctx.beginPath(); ctx.arc(viewW - 60, sy, 10, 0, 7); ctx.fill();
+    }
 
     // 雲（とても遠い）
     for (const [x, y, img] of CLOUDS) {
@@ -944,22 +1272,23 @@
     }
     // 山（奥ほどゆっくり動く）
     const groundY = 10 * TILE - camY;
-    for (const L of LAYERS) {
-      ctx.fillStyle = L.col;
+    LAYERS.forEach((L, li) => {
+      ctx.fillStyle = theme.mtn[li];
       const off = Math.floor(cx * L.par);
       for (let x = 0; x < viewW; x++) {
         const hy = L.h[(x + off) % PERIOD] - BASE_H + viewH;
         ctx.fillRect(x, hy, 1, groundY - hy);
       }
-    }
+    });
     drawRainbow(camY);
     // 丘
     const off = cx * 0.5;
     for (let x = 0; x < viewW; x++) {
       const hy = Math.round(groundY - 10 - 8 * Math.sin((x + off) * 0.03 + 1));
-      ctx.fillStyle = '#54ac60'; ctx.fillRect(x, hy, 1, groundY - hy);
-      ctx.fillStyle = '#8cd678'; ctx.fillRect(x, hy, 1, 1);
+      ctx.fillStyle = theme.hill[0]; ctx.fillRect(x, hy, 1, groundY - hy);
+      ctx.fillStyle = theme.hill[1]; ctx.fillRect(x, hy, 1, 1);
     }
+    if (theme.trees) drawForest(cx, groundY);
 
     // ブロックから出てくるアイテム（ブロックの後ろから出るように先にかく）
     for (const it of items) {
@@ -995,6 +1324,14 @@
       else if (c === '*') {
         const bob = Math.round(Math.sin(time * 4 + tx) * 1.5);
         ctx.drawImage(SPR.STAMP, dx + 1, dy + 1 + bob);
+      } else if (c === 'K') {
+        const n = gemSpots[tx + ',' + ty];
+        const had = (save.gems[STAGES[stageIndex].id] || [])[n];
+        const bob = Math.round(Math.sin(time * 3 + tx) * 2);
+        ctx.globalAlpha = had ? 0.45 : 1;
+        ctx.fillStyle = 'rgba(158,240,255,.35)'; ctx.beginPath(); ctx.arc(dx + 8, dy + 8 + bob, 8, 0, 7); ctx.fill();
+        ctx.drawImage(SPR.GEM, dx + 3, dy + 4 + bob);
+        ctx.globalAlpha = 1;
       }
     }
     // ステージより下も土で埋める（画面の下まで）
@@ -1006,12 +1343,20 @@
     drawCheckpoint(camY);
     // ゴールのポスト
     const pb = postBounce > 0 ? Math.round(Math.sin((1 - postBounce / 0.35) * Math.PI) * 5) : 0;
-    ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3 - pb);
+    if (goal) ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3 - pb);
+    if (theme.lighthouse && goal) drawLighthouse(goal.x + 6 * TILE - cx, 10 * TILE - camY);
+
+    // 動く足場
+    for (const m of movers) {
+      for (let x = 0; x < m.w; x += 16) ctx.drawImage(PLANK, Math.round(m.x + x - cx), Math.round(m.y - camY));
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(Math.round(m.x - cx), Math.round(m.y - camY) + 6, m.w, 2);
+    }
+    drawBoss(camY, cx);
 
     // 敵
     for (const e of enemies) {
       if (!e.active) continue;
-      const img = SPR[(e.kind === 'moyan' ? 'MOYAN' : 'TOGE') + (e.vx > 0 ? '_L' : '')];
+      const img = SPR[({ moyan: 'MOYAN', toge: 'TOGE', pata: 'PATA' })[e.kind] + (e.vx > 0 ? '_L' : '')];
       const ex = Math.round(e.x + e.w / 2 - img.width / 2 - cx);
       const ey = Math.round(e.y + e.h - img.height - camY);
       if (e.dead === 'squash') {
@@ -1020,7 +1365,7 @@
         ctx.save(); ctx.translate(ex + img.width / 2, ey + img.height / 2); ctx.scale(1, -1);
         ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore();
       } else {
-        const bob = Math.floor(time * 6 + e.x) % 2;
+        const bob = e.kind === 'pata' ? 0 : Math.floor(time * 6 + e.x) % 2;
         ctx.drawImage(img, ex, ey - bob);
       }
     }
@@ -1101,7 +1446,16 @@
   document.getElementById('stamp-icon').getContext('2d').drawImage(SPR.STAMP, 0, 0);
   document.getElementById('clear-stamp-icon').getContext('2d').drawImage(SPR.STAMP, 0, 0);
 
+  const gemCanvas = document.getElementById('gem-icons');
+  const gemCtx = gemCanvas.getContext('2d');
   function updateHud() {
+    gemCtx.clearRect(0, 0, gemCanvas.width, gemCanvas.height);
+    run.gems.forEach((g, i) => {
+      gemCtx.globalAlpha = g ? 1 : 0.3;
+      gemCtx.drawImage(SPR.GEM, i * 11, 0);
+    });
+    gemCtx.globalAlpha = 1;
+    document.getElementById('gems-pill').hidden = STAGES[stageIndex].boss;
     stampsEl.textContent = '× ' + run.stamps;
     livesEl.textContent = '× ' + run.lives;
     heartEls.forEach((h, i) => h.classList.toggle('empty', i >= run.hearts));
@@ -1172,7 +1526,7 @@
 
   function enterTitle() {
     state = 'title'; showActors = false;
-    buildLevel(); enemies = []; items = []; particles.length = 0;
+    buildLevel('1-1'); enemies = []; items = []; particles.length = 0; boss = null;
     setSat(1, false);
     showMenuScene(titleScreen);
     confirmNew.hidden = true;
@@ -1198,7 +1552,7 @@
   const unlocked = i => i === 0 || !!save.cleared[STAGES[i - 1].id];
   function enterMap(sel, from) {
     state = 'map'; showActors = false;
-    buildLevel(); enemies = []; items = []; particles.length = 0;
+    buildLevel('1-1'); enemies = []; items = []; particles.length = 0; boss = null;
     setSat(save.cleared[STAGES[0].id] ? 1 : 0.35, false);
     showMenuScene(mapScreen);
     mapNodes.innerHTML = '';
@@ -1213,11 +1567,20 @@
       b.className = cls.join(' ');
       b.id = 'node-' + st.id;
       let info = '';
-      if (!st.playable) info = '<span class="info">SOON</span>';
-      else if (!open) info = '<span class="info">LOCK</span>';
-      else if (save.cleared[st.id]) info = `<span class="info gold">切手 ${save.best[st.id] || 0}</span>`;
-      else info = '<span class="info">NEW</span>';
-      b.innerHTML = `<span class="dot">${st.label}</span>${info}`;
+      const gems = save.gems[st.id] || [];
+      if (!open) info = '<span class="info">LOCK</span>';
+      else if (st.boss) info = save.cleared[st.id] ? '<span class="info gold">CLEAR</span>' : '<span class="info">BOSS</span>';
+      else info = '<span class="info gems">' + [0, 1, 2].map(k => `<i class="${gems[k] ? 'on' : ''}"></i>`).join('') + '</span>';
+      b.innerHTML = `<canvas class="icon" width="16" height="16"></canvas><span class="tag">${st.label}</span>${info}`;
+      const icon = b.querySelector('canvas');
+      const icx = icon.getContext('2d');
+      let img = SPR.LETTERBLK;
+      if (st.boss) img = SPR.GEKO;
+      else if (save.cleared[st.id]) img = SPR.POST;
+      else if (!open) img = USED;
+      icon.width = img.width; icon.height = img.height;
+      icx.drawImage(img, 0, 0);
+      if (!open) { icon.style.filter = 'grayscale(1) brightness(.8)'; }
       b.addEventListener('click', () => selectNode(i));
       mapNodes.appendChild(b);
     });
@@ -1231,7 +1594,7 @@
     mapSel = i;
     [...mapNodes.children].forEach((n, k) => n.classList.toggle('sel', k === i));
     const node = mapNodes.children[i];
-    const dot = node.querySelector('.dot');
+    const dot = node.querySelector(".icon");
     const track = mapHero.parentElement.getBoundingClientRect(), d = dot.getBoundingClientRect();
     const x = d.left - track.left + d.width / 2 - mapHero.offsetWidth / 2;
     if (instant) { mapHero.style.transition = 'none'; mapHero.style.left = x + 'px'; void mapHero.offsetWidth; mapHero.style.transition = ''; }
@@ -1239,6 +1602,7 @@
     const st = STAGES[i];
     playBtn.disabled = !st.playable;
     playBtn.textContent = st.playable ? 'PLAY ' + st.label : 'COMING SOON';
+    document.getElementById('map-title').textContent = st.boss ? '大ガエル ゲコドン' : 'はじまりの草原島';
   }
 
   // ---- 会話（1場面 2〜5往復）
@@ -1249,6 +1613,12 @@
     { who: 'pocchi', text: 'かけらを取りもどせば、光がもどるよ。' },
     { who: 'postman', text: 'よし、配達に出発だ！' },
   ];
+  const CHAPTER1_END = [
+    { who: 'pocchi', text: '見て！　灯台に光がもどったよ！' },
+    { who: 'postman', text: 'やった！　草原にも色がもどった！' },
+    { who: 'pocchi', text: '次の島への橋もかかったよ。' },
+    { who: 'postman', text: 'あと4つ。いっしょにがんばろう！' },
+  ];
   const WHO = {
     postman: { name: 'ポストマン', face: 'STAND', cls: '' },
     pocchi: { name: 'ポッチ', face: 'POCCHI', cls: 'pocchi' },
@@ -1256,11 +1626,17 @@
   let dlg = null;
   const dlgName = document.getElementById('dialog-name');
   const dlgText = document.getElementById('dialog-text');
-  function playDialog(lines, done) {
+  function playDialog(lines, done, atLighthouse) {
     state = 'dialog'; showActors = false;
-    buildLevel(); enemies = []; items = []; particles.length = 0;
-    placePlayer(); showActors = true;
-    setSat(0, false);                          // 色が消えた世界
+    buildLevel(atLighthouse ? '1-3' : '1-1'); enemies = []; items = []; particles.length = 0; boss = null; bigGem = null;
+    run.checkpoint = false; placePlayer(); showActors = true;
+    if (atLighthouse) {
+      // 1-3 のゴールの先、光がもどった灯台の前で話す
+      player.x = goal.x + 2 * TILE; player.y = 10 * TILE - player.h;
+      camX = Math.max(0, Math.min(player.x - viewW * 0.35, LEVEL_W * TILE - viewW));
+      pocchi.x = player.x + 20; pocchi.y = player.y - 20;
+    }
+    setSat(atLighthouse ? 1 : 0, false);       // プロローグは色が消えた世界
     showMenuScene(dialogEl);
     dlg = { lines, i: -1, done, shown: 0, full: true };
     nextLine();
@@ -1300,7 +1676,7 @@
       acc = 0;
       if (state === 'title' || state === 'map') {
         // 背景の世界をゆっくり流す
-        camX = (camX + 18 * dt) % (LEVEL_W * TILE - viewW - 20);
+        camX = (camX + 18 * dt) % Math.max(1, LEVEL_W * TILE - viewW - 20);
         time += dt;
       } else if (state === 'dialog') {
         updateDialog(dt); time += dt;
@@ -1325,6 +1701,6 @@
     player, run, keys: keyKeys, sync: syncInput, collect, damage,
     get level() { return level; }, get enemies() { return enemies; }, get items() { return items; },
     get balls() { return balls; }, get state() { return state; }, get stamps() { return run.stamps; },
-    get save() { return save; }, enterStage, enterMap, enterTitle,
+    get save() { return save; }, enterStage, enterMap, enterTitle, get boss() { return boss; }, get bigGem() { return bigGem; },
   };
 })();
