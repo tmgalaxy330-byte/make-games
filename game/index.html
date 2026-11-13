@@ -27,7 +27,7 @@
   <div class="btn arrow" id="btn-right" data-key="right">▶</div>
   <div class="btn dash" id="btn-dash" data-key="dash">DASH</div>
   <div class="btn jump" id="btn-jump" data-key="jump">JUMP</div>
-  <div class="btn throw" id="btn-throw" data-key="throw" hidden>なげる</div>
+  <div class="btn throw" id="btn-throw" data-key="throw" hidden>FIRE</div>
 </div>
 
 <div class="overlay" id="pause-menu" hidden>
@@ -40,8 +40,7 @@
 
 <div class="overlay" id="clear-menu" hidden>
   <div class="panel">
-    <h2>配達完了！</h2>
-    <p>あつめた切手：<b id="clear-stamps">0</b> 枚</p>
+    <div class="result"><canvas id="clear-stamp-icon" width="13" height="13"></canvas><b>×</b><b id="clear-stamps">0</b></div>
     <button id="btn-again">もういちど</button>
   </div>
 </div>

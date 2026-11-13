@@ -323,6 +323,7 @@
   const particles = [];
   const bumps = [];
   let dustT = 0;
+  let postBounce = 0;
 
   function placePlayer() {
     const p = run.checkpoint ? CHECKPOINT : START;
@@ -348,6 +349,7 @@
     placePlayer();
     state = 'play';
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
+    document.body.classList.remove('cutscene');
     updateHud();
   }
 
@@ -630,9 +632,7 @@
 
     // ---- ゴール
     if (player.x + player.w > goal.x + 2 && player.x < goal.x + goal.w - 2 && player.y + player.h > goal.y) {
-      state = 'clear';
-      document.getElementById('clear-stamps').textContent = run.stamps;
-      clearMenu.hidden = false;
+      startGoal();
     }
 
     // ---- ダッシュ中の土けむり
@@ -669,7 +669,93 @@
     balls = balls.filter(b => !b.done);
   }
 
+  // ------------------------------------------------------------------ ゴールの演出（文字なし）
+  // 1) 手紙をポストに入れる → 2) ポストがはねて花火と虹 → 3) 主人公がよろこぶ → 4) 丸く画面が閉じる
+  const GOAL = { letter: 0.55, fireworks: 0.7, rainbow: 0.8, irisStart: 3.4, irisEnd: 4.3 };
+  let goalT = 0, fwNext = 0;
+  const FW_COLORS = ['#ff5a5a', '#ffaa3c', '#ffe650', '#6edc5a', '#5aa0ff', '#be6eff', '#ffffff', '#ff8cc8'];
+
+  function startGoal() {
+    state = 'goal'; goalT = 0; fwNext = GOAL.fireworks;
+    player.vx = 0; player.face = 1;
+    player.x = Math.min(player.x, goal.x - player.w - 1);    // ポストの横に立つ
+    run.invT = 0; run.hurtT = 0;
+    document.body.classList.add('cutscene');
+    particles.push({ kind: 'letter', sx: player.x + player.w / 2, sy: player.y + 6,
+      ex: goal.x + 7, ey: goal.y + 3, x: 0, y: 0, t: 0, life: GOAL.letter });
+  }
+
+  function burst(x, y) {
+    const col = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+    const col2 = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+    const n = 40;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, sp = (i % 2 ? 70 : 45) + Math.random() * 20;
+      particles.push({ kind: 'fw', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 1.3, color: i % 2 ? col : col2 });
+    }
+    particles.push({ kind: 'flash', x, y, t: 0, life: 0.15 });
+  }
+
+  function updateGoal(dt) {
+    goalT += dt;
+    // 主人公：その場でうれしそうにぴょんぴょん
+    player.vy = Math.min(player.vy + PHYS.gDown * dt, PHYS.maxFall);
+    player.y += player.vy * dt;
+    const floor = 10 * TILE;
+    if (player.y + player.h >= floor) { player.y = floor - player.h; player.vy = 0; player.onGround = true; } else player.onGround = false;
+    if (player.onGround && goalT > GOAL.letter + 0.2 && goalT < GOAL.irisStart) player.vy = -190;
+    // 花火（打ち上げ → 開く）
+    if (goalT >= fwNext && goalT < GOAL.irisStart - 0.3) {
+      fwNext += 0.32;
+      const tx = camX + viewW * (0.15 + Math.random() * 0.7);
+      particles.push({ kind: 'rocket', x: tx, y: floor, vx: 0, vy: -230, t: 0, life: 0.32 + Math.random() * 0.18 });
+    }
+    // 相棒もくるくる
+    pocchi.t += dt * 3;
+    pocchi.x = lerp(pocchi.x, player.x - 14 + Math.cos(pocchi.t) * 14, Math.min(1, dt * 6));
+    pocchi.y = lerp(pocchi.y, player.y - 20 + Math.sin(pocchi.t) * 8, Math.min(1, dt * 6));
+    updateParticles(dt);
+    if (goalT >= GOAL.irisEnd + 0.25 && state === 'goal') {
+      state = 'clear';
+      document.getElementById('clear-stamps').textContent = run.stamps;
+      clearMenu.hidden = false;
+    }
+  }
+
+  function drawRainbow(camY) {
+    if (state !== 'goal' && state !== 'clear') return;
+    const p = Math.max(0, Math.min(1, (goalT - GOAL.rainbow) / 1.2));
+    if (p <= 0) return;
+    const cxr = goal.x + 8 - camX, cyr = 10 * TILE - camY;
+    const cols = ['#ff5a5a', '#ffaa3c', '#ffe650', '#6edc5a', '#5aa0ff', '#be6eff'];
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = 5;
+    cols.forEach((c, i) => {
+      ctx.strokeStyle = c;
+      ctx.beginPath();
+      ctx.arc(cxr - 40, cyr, 110 - i * 5, Math.PI, Math.PI + Math.PI * p);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function drawIris(camY) {
+    if (state !== 'goal' && state !== 'clear') return;
+    const p = Math.max(0, Math.min(1, (goalT - GOAL.irisStart) / (GOAL.irisEnd - GOAL.irisStart)));
+    if (p <= 0) return;
+    const cxp = player.x + player.w / 2 - camX, cyp = player.y + player.h / 2 - camY;
+    const maxR = Math.hypot(Math.max(cxp, viewW - cxp), Math.max(cyp, viewH - cyp));
+    const r = maxR * (1 - p) * (1 - p);
+    ctx.fillStyle = '#141428';
+    ctx.beginPath();
+    ctx.rect(0, 0, viewW, viewH);
+    if (r > 0.5) ctx.arc(cxp, cyp, r, 0, Math.PI * 2, true);
+    ctx.fill('evenodd');
+  }
+
   function update(dt) {
+    if (state === 'goal') { updateGoal(dt); camX = lerp(camX, Math.max(0, Math.min(player.x + player.w / 2 - viewW * 0.42, LEVEL_W * TILE - viewW)), Math.min(1, dt * 8)); return; }
     if (state === 'miss') {
       missT -= dt;
       player.vy += PHYS.gDown * 0.6 * dt; player.y += player.vy * dt;
@@ -705,9 +791,20 @@
       p.t += dt;
       if (p.kind === 'stamp') { p.y += p.vy * dt; p.vy += 500 * dt; }
       else if (p.kind === 'text') { p.y -= 18 * dt; }
+      else if (p.kind === 'letter') {
+        const k = Math.min(1, p.t / p.life);
+        p.x = lerp(p.sx, p.ex, k); p.y = lerp(p.sy, p.ey, k) - Math.sin(k * Math.PI) * 18;
+        if (k >= 1 && !p.done) { p.done = true; postBounce = 0.35; burst(goal.x + 8, goal.y - 6); }
+      }
+      else if (p.kind === 'fw') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; p.vy = p.vy * 0.97 + 40 * dt; }
+      else if (p.kind === 'rocket') {
+        p.y += p.vy * dt;
+        if (p.t >= p.life && !p.done) { p.done = true; burst(p.x, p.y); }
+      }
       else { p.x += p.vx * dt; p.y += p.vy * dt; }
     }
-    for (let i = particles.length - 1; i >= 0; i--) if (particles[i].t > particles[i].life) particles.splice(i, 1);
+    if (postBounce > 0) postBounce = Math.max(0, postBounce - dt);
+    for (let i = particles.length - 1; i >= 0; i--) if (particles[i].t > particles[i].life + (particles[i].kind === 'letter' ? 0.01 : 0)) particles.splice(i, 1);
   }
 
   // ------------------------------------------------------------------ 描画
@@ -803,6 +900,7 @@
         ctx.fillRect(x, hy, 1, groundY - hy);
       }
     }
+    drawRainbow(camY);
     // 丘
     const off = cx * 0.5;
     for (let x = 0; x < viewW; x++) {
@@ -855,7 +953,8 @@
 
     drawCheckpoint(camY);
     // ゴールのポスト
-    ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3);
+    const pb = postBounce > 0 ? Math.round(Math.sin((1 - postBounce / 0.35) * Math.PI) * 5) : 0;
+    ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3 - pb);
 
     // 敵
     for (const e of enemies) {
@@ -905,6 +1004,19 @@
         ctx.lineWidth = 3; ctx.strokeStyle = '#281c34'; ctx.strokeText(p.text, px, py);
         ctx.fillStyle = p.color; ctx.fillText(p.text, px, py);
         ctx.globalAlpha = 1;
+      } else if (p.kind === 'letter') {
+        if (!p.done) { ctx.fillStyle = '#281c34'; ctx.fillRect(px - 5, py - 4, 10, 8); ctx.fillStyle = '#fff'; ctx.fillRect(px - 4, py - 3, 8, 6); ctx.fillStyle = '#e23034'; ctx.fillRect(px - 1, py - 1, 2, 2); }
+      } else if (p.kind === 'fw') {
+        ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+        ctx.fillStyle = p.color; ctx.fillRect(px - 1, py - 1, 3, 3);
+        ctx.fillRect(Math.round(px - p.vx * 0.05), Math.round(py - p.vy * 0.05), 2, 2);
+        ctx.fillRect(Math.round(px - p.vx * 0.1), Math.round(py - p.vy * 0.1), 1, 1);
+        ctx.globalAlpha = 1;
+      } else if (p.kind === 'flash') {
+        ctx.fillStyle = `rgba(255,255,230,${1 - p.t / p.life})`;
+        ctx.beginPath(); ctx.arc(px, py, 10, 0, 7); ctx.fill();
+      } else if (p.kind === 'rocket') {
+        if (!p.done) { ctx.fillStyle = '#fff4aa'; ctx.fillRect(px, py, 1, 3); ctx.fillStyle = 'rgba(255,244,170,.5)'; ctx.fillRect(px, py + 3, 1, 4); }
       } else { ctx.fillStyle = '#fff4aa'; ctx.fillRect(px, py, 2, 2); }
     }
 
@@ -916,6 +1028,7 @@
       ctx.fillStyle = '#fff'; ctx.fillText('ミス！', viewW / 2, viewH / 2 - 10);
     }
     if (fadeT > 0) { ctx.fillStyle = `rgba(16,20,40,${fadeT * 1.6})`; ctx.fillRect(0, 0, viewW, viewH); }
+    drawIris(camY);
   }
 
   // ------------------------------------------------------------------ HUD・メニュー
@@ -926,6 +1039,7 @@
   const itemCtx = itemCanvas.getContext('2d');
   const throwBtn = document.getElementById('btn-throw');
   document.getElementById('stamp-icon').getContext('2d').drawImage(SPR.STAMP, 0, 0);
+  document.getElementById('clear-stamp-icon').getContext('2d').drawImage(SPR.STAMP, 0, 0);
 
   function updateHud() {
     stampsEl.textContent = '× ' + run.stamps;
@@ -975,7 +1089,7 @@
   let last = performance.now(), acc = 0;
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (state === 'play' || state === 'miss') {
+    if (state === 'play' || state === 'miss' || state === 'goal') {
       acc += dt;
       while (acc >= STEP) { update(STEP); acc -= STEP; }
       time += dt;

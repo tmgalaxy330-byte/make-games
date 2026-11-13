@@ -59,19 +59,25 @@ html, body {
 #btn-right { left: calc(106px + var(--safe-l)); }
 .jump { width: 92px; height: 92px; right: calc(18px + var(--safe-r)); bottom: calc(26px + var(--safe-b)); background: rgba(255,136,72,.55); font-size: 18px; }
 .jump.on { background: rgba(255,136,72,.85); }
-.dash { width: 72px; height: 72px; right: calc(118px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); background: rgba(70,160,255,.5); font-size: 15px; }
+.dash { width: 62px; height: 62px; right: calc(46px + var(--safe-r)); bottom: calc(132px + var(--safe-b)); background: rgba(70,160,255,.5); font-size: 13px; }
 .dash.on { transform: translateY(3px) scale(.96); }
 .dash.active {
-  background: rgba(40,150,255,.92); border-color: #fff; font-size: 13px; line-height: 1.1; text-align: center;
+  background: rgba(40,150,255,.92); border-color: #fff; font-size: 11px; line-height: 1.1; text-align: center;
   box-shadow: 0 5px 0 rgba(0,0,0,.18), 0 0 0 4px rgba(120,200,255,.55), 0 0 18px rgba(120,200,255,.9);
 }
 
-.throw { width: 60px; height: 60px; right: calc(46px + var(--safe-r)); bottom: calc(132px + var(--safe-b)); background: rgba(255,214,60,.6); font-size: 13px; }
+.throw { width: 72px; height: 72px; right: calc(118px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); background: rgba(255,170,40,.6); font-size: 16px; }
 .throw.on { background: rgba(255,214,60,.9); }
 #item-icons { height: 24px; image-rendering: pixelated; }
 .pill[hidden], .btn[hidden] { display: none; }
 
+/* ゴール演出中はボタンと表示を消す */
+#pad, #hud { transition: opacity .3s; }
+body.cutscene #pad, body.cutscene #hud { opacity: 0; pointer-events: none; }
+
 /* ---------- overlays ---------- */
+.result { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 30px; margin-bottom: 8px; color: #ffec96; }
+.result canvas { width: 39px; height: 39px; image-rendering: pixelated; }
 .overlay {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
   background: rgba(16, 20, 40, .55);
