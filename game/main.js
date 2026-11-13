@@ -1,4 +1,4 @@
-// ミスターポストマン：Step 1 試作（走る・跳ぶ・床に立つ・タッチ操作）
+// ミスターポストマン：Step 2 試作（敵・アイテム・ダメージ・のこり人数・中間ポスト）
 (() => {
   'use strict';
 
@@ -18,11 +18,34 @@
     airBrake: 1100,   // 空中で反対向きを押したときの減速
     jump: 318,        // ジャンプの初速 → 最大の高さ ≒ 318² / (2×900) ≒ 56ドット（約3.5マス）
     dashJump: 360,    // ダッシュ最高速でのジャンプ初速 → ≒ 72ドット（約4.5マス）
+    doubleJump: 280,  // バネぐつの2段目
+    stomp: 230,       // 敵を踏んだときのはね返り
+    stompHigh: 330,   // 踏んだときにJUMPを押していると高くはねる
     gUp: 900,         // 上昇中（ボタンを押している間）の重力
     gDown: 1500,      // 下降中・ボタンを離したときの重力
     maxFall: 380,
+    glideFall: 45,    // 紙ひこうきマントで滑空中の落ちる速さ
     coyote: 0.10,     // 足場から落ちた後もジャンプできる時間
     buffer: 0.12,     // 着地前のジャンプ入力を覚えておく時間
+  };
+  // ゲームのルール
+  const RULE = {
+    hearts: 3,        // 体力
+    lives: 3,         // のこり人数（ミスできる回数）
+    iframes: 1.5,     // ダメージ後に点めつして当たらない時間
+    invincible: 8,    // ニジのスカーフのむてき時間
+    invWarn: 2,       // むてきが終わる前に点めつする時間
+    stampsFor1up: 100,
+    dupStamps: 5,     // 同じアイテムを取ったときの切手
+  };
+  const POWERS = ['boots', 'lantern', 'plane'];
+  const NAMES = {
+    boots: 'バネぐつ', lantern: 'ランタン', plane: '紙ひこうきマント', bag: '大きな配達カバン',
+    onigiri: 'おにぎり', scarf: 'ニジのスカーフ', oneup: 'はげましの手紙',
+  };
+  const ITEM_SPR = {
+    boots: 'BOOTS', lantern: 'LANTERN', plane: 'PLANE', bag: 'BIGBAG',
+    onigiri: 'ONIGIRI', scarf: 'SCARF', oneup: 'LETTER_1UP',
   };
 
   const canvas = document.getElementById('game');
@@ -30,49 +53,77 @@
   const SPR = window.SPR;
 
   // ------------------------------------------------------------------ ステージ（1-1 試作）
-  // '#'=地面 '='=板（下から通りぬけ可） 'B'=手紙ブロック 'P'=小包ブロック '*'=ハート切手
+  // '#'=地面 '='=板（下から通りぬけ可） 'B'=手紙ブロック 'P'=小包ブロック
+  // 'H'=かくしブロック（見えない） 'U'=空ブロック '*'=ハート切手
   const LEVEL_W = 150;
   const level = [];
-  let goal = { x: 0, y: 0, w: 16, h: 20 };
-  let start = { x: 3 * TILE, y: 9 * TILE };
+  const contents = {};      // "x,y" → ブロックの中身
+  const parcelHits = {};
+  let enemies = [];
+  let goal = { x: 134 * TILE, y: 10 * TILE - 20, w: 16, h: 20 };
+  const START = { x: 3 * TILE, y: 10 * TILE };
+  const CHECKPOINT = { x: 60 * TILE, y: 10 * TILE };
 
   function buildLevel() {
     level.length = 0;
+    for (const k in contents) delete contents[k];
+    for (const k in parcelHits) delete parcelHits[k];
+    enemies = [];
     for (let r = 0; r < ROWS; r++) level.push(new Array(LEVEL_W).fill('.'));
     const set = (x, y, c) => { if (x >= 0 && x < LEVEL_W && y >= 0 && y < ROWS) level[y][x] = c; };
     const ground = (x0, x1, top = 10) => { for (let x = x0; x <= x1; x++) for (let y = top; y < ROWS; y++) set(x, y, '#'); };
     const plank = (x0, x1, y) => { for (let x = x0; x <= x1; x++) set(x, y, '='); };
     const stamps = (x0, x1, y) => { for (let x = x0; x <= x1; x++) set(x, y, '*'); };
+    const block = (x, y, item = 'stamp', kind = 'B') => { set(x, y, kind); contents[x + ',' + y] = item; };
+    const pillar = (x, h) => { for (let y = 10 - h; y <= 9; y++) set(x, y, '#'); };
+    const enemy = (kind, x) => enemies.push({
+      kind, x: x * TILE + 2, y: 10 * TILE - 14, w: 12, h: 14, vx: -22, vy: 0,
+      active: false, dead: null, deadT: 0, onGround: false,
+    });
 
+    // --- はじまり
     ground(0, 30);
-    stamps(8, 11, 8);
-    set(15, 6, 'B'); set(16, 6, 'P'); set(17, 6, 'B');
-    stamps(15, 17, 4);
+    stamps(6, 9, 8);
+    block(13, 6); block(14, 6, 'boots'); block(15, 6, 'stamp', 'P'); block(16, 6);
+    enemy('moyan', 20);
     plank(22, 26, 7); stamps(23, 25, 5);
+    enemy('moyan', 28);
     // 穴（3マス）
     ground(34, 62);
-    set(40, 9, '#'); for (let y = 8; y <= 9; y++) set(41, y, '#'); for (let y = 7; y <= 9; y++) set(42, y, '#');
+    block(37, 6, 'plane');
+    pillar(40, 1); pillar(41, 2); pillar(42, 3);
     stamps(40, 42, 5);
-    plank(47, 51, 7); plank(53, 56, 5); stamps(53, 56, 3);
-    // 穴（4マス）＋まん中に板
+    enemy('toge', 45);
+    plank(47, 51, 7); block(49, 3, 'bag');
+    plank(53, 56, 5); stamps(53, 56, 3);
+    enemy('moyan', 57); enemy('moyan', 59);
+    // 中間ポスト（x=60）のあと、穴（まん中に板）
     plank(64, 65, 8); stamps(64, 65, 6);
     ground(68, 100);
-    for (let y = 8; y <= 9; y++) set(74, y, '#');
-    for (let y = 7; y <= 9; y++) set(80, y, '#');
-    for (let y = 8; y <= 9; y++) set(85, y, '#');           // 高い柱の前に段をつける
-    for (let y = 6; y <= 9; y++) set(86, y, '#');
+    pillar(74, 2);
+    enemy('toge', 77);
+    pillar(80, 3);
+    enemy('moyan', 83);
+    pillar(85, 2); pillar(86, 4);
     stamps(76, 78, 6); stamps(82, 84, 5);
-    set(92, 6, 'B'); set(93, 6, 'B'); set(94, 6, 'B');
+    block(92, 6, 'onigiri'); block(93, 6, 'lantern'); block(94, 6);
+    enemy('moyan', 96);
+    block(97, 6, 'oneup', 'H');                     // かくしブロック
+    enemy('moyan', 99);
     // 穴（3マス）
     ground(104, LEVEL_W - 1);
-    for (let i = 0; i < 4; i++) for (let y = 9 - i; y <= 9; y++) set(112 + i, y, '#');
+    block(106, 6, 'scarf');
+    enemy('moyan', 108); enemy('toge', 109); enemy('moyan', 110);
+    for (let i = 0; i < 4; i++) pillar(112 + i, i + 1);
     stamps(118, 122, 8);
+    enemy('moyan', 122); enemy('moyan', 125); enemy('toge', 128);
     goal = { x: 134 * TILE, y: 10 * TILE - 20, w: 16, h: 20 };
     for (let y = 0; y < 10; y++) set(LEVEL_W - 1, y, '#');   // 右はしの壁
   }
 
   const isSolid = c => c === '#' || c === 'B' || c === 'P' || c === 'U';
   const tileAt = (tx, ty) => (tx < 0 || tx >= LEVEL_W) ? '#' : (ty < 0 || ty >= ROWS) ? '.' : level[ty][tx];
+  const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
   // ------------------------------------------------------------------ 画面サイズ
   let viewW = 320, viewH = BASE_H;
@@ -113,9 +164,9 @@
   const PERIOD = 2048;
   for (const L of LAYERS) {
     L.h = new Int16Array(PERIOD);
+    const k = (2 * Math.PI) / PERIOD;
+    const n1 = Math.round(L.f * PERIOD / (2 * Math.PI)) || 1;
     for (let x = 0; x < PERIOD; x++) {
-      const k = (2 * Math.PI) / PERIOD;
-      const n1 = Math.round(L.f * PERIOD / (2 * Math.PI)) || 1;
       L.h[x] = Math.round(L.base - L.amp * (0.6 * Math.sin(x * k * n1 + L.ph) + 0.4 * Math.sin(x * k * n1 * 2 + L.ph * 3)));
     }
   }
@@ -184,35 +235,34 @@
   })();
 
   // ------------------------------------------------------------------ 入力（タッチ＋キーボード）
-  const input = { left: false, right: false, jump: false, dash: false };
-  let jumpPrev = false;
-  const touchKeys = { left: false, right: false, jump: false, dash: false };
-  const keyKeys = { left: false, right: false, jump: false, dash: false };
+  const input = { left: false, right: false, jump: false, dash: false, throw: false };
+  const touchKeys = { left: false, right: false, jump: false, dash: false, throw: false };
+  const keyKeys = { left: false, right: false, jump: false, dash: false, throw: false };
+  let jumpPrev = false, throwPrev = false;
 
   const buttons = [...document.querySelectorAll('#pad .btn')].map(el => ({ el, key: el.dataset.key }));
   const HIT_PAD = 18;   // ボタンの反応範囲を見た目より広くする（px）
 
-  // 1本の指で押しているボタンを返す。
-  function hitKeys(x, y) {
-    const hits = [];
+  // 1本の指で押しているボタン（いちばん近いもの）を返す
+  function hitTest(x, y) {
+    let best = null, bestD = Infinity;
     for (const b of buttons) {
+      if (b.el.hidden) continue;
       const r = b.el.getBoundingClientRect();
       if (x < r.left - HIT_PAD || x > r.right + HIT_PAD || y < r.top - HIT_PAD || y > r.bottom + HIT_PAD) continue;
-      hits.push({ key: b.key, d: Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2) });
+      const d = Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2);
+      if (d < bestD) { bestD = d; best = b.key; }
     }
-    if (!hits.length) return [];
-    const keys = hits.map(h => h.key);
-    hits.sort((a, b) => a.d - b.d);
-    return [hits[0].key];
+    return best;
   }
-  const hitTest = (x, y) => hitKeys(x, y)[0] || null;
 
   function onTouch(e) {
     if (e.target.closest && e.target.closest('button')) return;   // メニューのボタンは通常どおり
     e.preventDefault();
     for (const k in touchKeys) touchKeys[k] = false;
     for (const t of e.touches) {
-      for (const k of hitKeys(t.clientX, t.clientY)) touchKeys[k] = true;
+      const k = hitTest(t.clientX, t.clientY);
+      if (k) touchKeys[k] = true;
     }
     syncInput();
   }
@@ -225,11 +275,13 @@
   document.addEventListener('mouseup', () => { if (mouseKey) { touchKeys[mouseKey] = false; mouseKey = null; syncInput(); } });
 
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
-    Space: 'jump', ArrowUp: 'jump', KeyZ: 'jump', KeyW: 'jump', KeyX: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash' };
+    Space: 'jump', ArrowUp: 'jump', KeyZ: 'jump', KeyW: 'jump',
+    KeyX: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyC: 'throw' };
   addEventListener('keydown', e => {
     if (e.code === 'Escape' || e.code === 'KeyP') { togglePause(); return; }
     const k = KEYMAP[e.code]; if (!k) return;
-    e.preventDefault(); keyKeys[k] = true; syncInput();
+    e.preventDefault(); if (e.repeat) return;
+    keyKeys[k] = true; syncInput();
   });
   addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (!k) return; keyKeys[k] = false; syncInput(); });
 
@@ -246,42 +298,228 @@
     for (const k in input) raw[k] = touchKeys[k] || keyKeys[k];
     if (raw.dash && !dashRawPrev) setDash(!dashMode);
     dashRawPrev = raw.dash;
-    input.left = raw.left; input.right = raw.right; input.jump = raw.jump;
+    input.left = raw.left; input.right = raw.right; input.jump = raw.jump; input.throw = raw.throw;
     input.dash = dashMode;
     for (const b of buttons) b.el.classList.toggle('on', raw[b.key]);
   }
 
-  // ------------------------------------------------------------------ プレイヤー
+  // ------------------------------------------------------------------ ゲームの状態
   const player = {
-    x: 0, y: 0, w: 10, h: 18, vx: 0, vy: 0,
+    x: 0, y: 0, w: 10, h: 18, vx: 0, vy: 0, prevBottom: 0,
     onGround: false, face: 1, coyote: 0, buffer: 0, jumping: false, animT: 0,
+    usedDouble: false, gliding: false,
   };
   const pocchi = { x: 0, y: 0, t: 0 };
-  let stampCount = 0;
+  const run = {
+    hearts: RULE.hearts, lives: RULE.lives, stamps: 0,
+    power: null, bag: false, invT: 0, hurtT: 0, checkpoint: false,
+  };
+  let items = [];           // ブロックから出たアイテム
+  let balls = [];           // ランタンの光の玉
   let camX = 0;
-  let state = 'play';       // 'play' | 'pause' | 'clear'
-  let fadeT = 0;            // ミス時のフェード
+  let state = 'play';       // 'play' | 'pause' | 'miss' | 'clear' | 'over'
+  let missT = 0;
+  let fadeT = 0;
   const particles = [];
+  const bumps = [];
   let dustT = 0;
-  const bumps = [];         // たたかれたブロックのゆれ
 
-  function reset() {
-    buildLevel();
-    player.x = start.x; player.y = start.y + TILE - player.h;
+  function placePlayer() {
+    const p = run.checkpoint ? CHECKPOINT : START;
+    player.x = p.x; player.y = p.y - player.h;
     player.vx = player.vy = 0; player.face = 1; player.onGround = false;
+    player.usedDouble = false; player.gliding = false;
     pocchi.x = player.x - 16; pocchi.y = player.y - 20;
-    stampCount = 0; updateStampHud(); setDash(false);
-    camX = 0; particles.length = 0; bumps.length = 0;
+    camX = Math.max(0, Math.min(player.x - viewW * 0.42, LEVEL_W * TILE - viewW));
+  }
+
+  // 最初から（タイトルにもどる代わり）
+  function newGame() {
+    run.hearts = RULE.hearts; run.lives = RULE.lives; run.stamps = 0;
+    run.power = null; run.bag = false; run.invT = 0; run.hurtT = 0; run.checkpoint = false;
+    startLevel();
+    setDash(false);
+  }
+
+  // ステージを作り直して、スタート地点（または中間ポスト）から
+  function startLevel() {
+    buildLevel();
+    items = []; balls = []; particles.length = 0; bumps.length = 0;
+    placePlayer();
     state = 'play';
-    pauseMenu.hidden = true; clearMenu.hidden = true;
+    for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
+    updateHud();
   }
 
-  function respawn() {
-    player.x = start.x; player.y = start.y + TILE - player.h;
-    player.vx = player.vy = 0; fadeT = 0.5;
-    camX = Math.max(0, player.x - viewW * 0.4);
+  // ------------------------------------------------------------------ ダメージ・ミス
+  function damage() {
+    if (run.invT > 0 || run.hurtT > 0 || state !== 'play') return;
+    // なくなる順番：カバン → パワーアップ → ハート
+    if (run.bag) { run.bag = false; popText('カバンがやぶれた！'); }
+    else if (run.power) { popText(NAMES[run.power] + 'をなくした'); run.power = null; }
+    else { run.hearts--; }
+    run.hurtT = RULE.iframes;
+    player.vy = Math.min(player.vy, -140);
+    player.vx = -player.face * 60;
+    updateHud();
+    if (run.hearts <= 0) miss();
   }
 
+  function miss() {
+    if (state !== 'play') return;
+    state = 'miss'; missT = 1.2;
+    player.vx = 0; player.vy = -220;
+  }
+
+  function afterMiss() {
+    if (run.lives <= 0) {
+      state = 'over';
+      overMenu.hidden = false;
+      return;
+    }
+    run.lives--;
+    run.hearts = RULE.hearts; run.power = null; run.bag = false; run.invT = 0; run.hurtT = 0;
+    fadeT = 0.5;
+    startLevel();
+  }
+
+  // ------------------------------------------------------------------ 切手・アイテム
+  function addStamps(n, x, y) {
+    for (let i = 0; i < n; i++) {
+      run.stamps++;
+      if (run.stamps % RULE.stampsFor1up === 0) { run.lives++; popText('1UP！', '#7dff8a'); }
+    }
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      particles.push({ kind: 'spark', x: x + 6, y: y + 6, vx: Math.cos(a) * 50, vy: Math.sin(a) * 50, t: 0, life: 0.3 });
+    }
+    updateHud();
+  }
+
+  function popText(text, color = '#fff') {
+    particles.push({ kind: 'text', text, color, x: player.x + player.w / 2, y: player.y - 6, t: 0, life: 1.2 });
+  }
+
+  function collect(kind) {
+    const x = player.x, y = player.y;
+    if (POWERS.includes(kind)) {
+      if (run.power === kind) { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
+      else { run.power = kind; popText(NAMES[kind] + '！', '#ffec96'); }
+    } else if (kind === 'bag') {
+      if (run.bag) { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
+      else { run.bag = true; popText('大きな配達カバン！', '#ffec96'); }
+    } else if (kind === 'onigiri') {
+      if (run.hearts < RULE.hearts) { run.hearts++; popText('ハート回復！', '#ff9aa0'); }
+      else { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
+    } else if (kind === 'scarf') {
+      run.invT = RULE.invincible; popText('むてき！', '#fff4aa');
+    } else if (kind === 'oneup') {
+      run.lives++; popText('1UP！', '#7dff8a');
+    }
+    updateHud();
+  }
+
+  function hitBlock(tx, ty) {
+    const c = level[ty][tx];
+    if (c !== 'B' && c !== 'P' && c !== 'H') return;
+    bumps.push({ tx, ty, t: 0 });
+    const key = tx + ',' + ty;
+    const what = contents[key] || 'stamp';
+    // ブロックの上にいる敵ははね飛ばす
+    for (const e of enemies) {
+      if (!e.dead && e.x + e.w > tx * TILE && e.x < (tx + 1) * TILE && Math.abs(e.y + e.h - ty * TILE) < 3) killEnemy(e, 'fall');
+    }
+    if (what === 'stamp') {
+      particles.push({ kind: 'stamp', x: tx * TILE + 2, y: ty * TILE - 14, vy: -140, t: 0, life: 0.45 });
+      addStamps(1, tx * TILE + 2, ty * TILE - 14);
+    } else {
+      items.push({ kind: what, x: tx * TILE, y: ty * TILE, w: 16, h: 16, rise: 0, baseY: ty * TILE });
+    }
+    if (c === 'P') {
+      parcelHits[key] = (parcelHits[key] || 0) + 1;
+      if (parcelHits[key] >= 10) level[ty][tx] = 'U';
+    } else level[ty][tx] = 'U';
+  }
+
+  // ------------------------------------------------------------------ 敵
+  function killEnemy(e, how) {
+    if (e.dead) return;
+    e.dead = how; e.deadT = 0;
+    if (how === 'fall') { e.vy = -160; e.vx = (e.x < player.x ? -1 : 1) * 40; }
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.6;
+      particles.push({ kind: 'spark', x: e.x + 6, y: e.y + 6, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, t: 0, life: 0.3 });
+    }
+  }
+
+  // 敵・光の玉などに使う、かんたんな当たり判定つき移動
+  function moveBody(b, dt) {
+    b.vy = Math.min(b.vy + PHYS.gDown * dt, PHYS.maxFall);
+    let hitWall = false;
+    b.x += b.vx * dt;
+    const top = Math.floor(b.y / TILE), bot = Math.floor((b.y + b.h - 1) / TILE);
+    if (b.vx > 0) {
+      const tx = Math.floor((b.x + b.w) / TILE);
+      for (let ty = top; ty <= bot; ty++) if (isSolid(tileAt(tx, ty))) { b.x = tx * TILE - b.w; hitWall = true; break; }
+    } else if (b.vx < 0) {
+      const tx = Math.floor(b.x / TILE);
+      for (let ty = top; ty <= bot; ty++) if (isSolid(tileAt(tx, ty))) { b.x = (tx + 1) * TILE; hitWall = true; break; }
+    }
+    const prevBottom = b.y + b.h;
+    b.y += b.vy * dt;
+    b.onGround = false;
+    const l = Math.floor(b.x / TILE), r = Math.floor((b.x + b.w - 1) / TILE);
+    if (b.vy >= 0) {
+      const ty = Math.floor((b.y + b.h) / TILE);
+      for (let tx = l; tx <= r; tx++) {
+        const c = tileAt(tx, ty);
+        if (isSolid(c) || (c === '=' && prevBottom <= ty * TILE + 0.01)) { b.y = ty * TILE - b.h; b.vy = 0; b.onGround = true; break; }
+      }
+    } else {
+      const ty = Math.floor(b.y / TILE);
+      for (let tx = l; tx <= r; tx++) if (isSolid(tileAt(tx, ty))) { b.y = (ty + 1) * TILE; b.vy = 0; break; }
+    }
+    return hitWall;
+  }
+
+  function updateEnemies(dt) {
+    for (const e of enemies) {
+      if (!e.active) {
+        if (e.x < camX + viewW + 24) e.active = true; else continue;
+      }
+      if (e.dead) {
+        e.deadT += dt;
+        if (e.dead === 'fall') { e.vy += PHYS.gDown * dt; e.x += e.vx * dt; e.y += e.vy * dt; }
+        continue;
+      }
+      if (moveBody(e, dt)) e.vx = -e.vx;
+      // 足場のはしで引き返す（小学生でも読みやすい動き）
+      if (e.onGround) {
+        const fx = e.vx > 0 ? Math.floor((e.x + e.w + 1) / TILE) : Math.floor((e.x - 1) / TILE);
+        const fy = Math.floor((e.y + e.h + 1) / TILE);
+        const c = tileAt(fx, fy);
+        if (!isSolid(c) && c !== '=') e.vx = -e.vx;
+      }
+      if (e.y > ROWS * TILE + 40) { e.dead = 'gone'; continue; }
+
+      // 主人公とのふれあい
+      if (state !== 'play' || !overlap(player, e)) continue;
+      if (run.invT > 0) { killEnemy(e, 'fall'); continue; }
+      const fromAbove = player.vy > 0 && player.prevBottom <= e.y + 6;
+      if (e.kind === 'moyan' && fromAbove) {
+        killEnemy(e, 'squash');
+        player.y = e.y - player.h;
+        player.vy = -(input.jump ? PHYS.stompHigh : PHYS.stomp);
+        player.jumping = input.jump;
+        player.usedDouble = false;
+      } else {
+        damage();
+      }
+    }
+    enemies = enemies.filter(e => !(e.dead === 'squash' && e.deadT > 0.4) && !(e.dead === 'fall' && e.y > ROWS * TILE + 60) && e.dead !== 'gone');
+  }
+
+  // ------------------------------------------------------------------ 主人公の動き
   function approach(v, target, amount) { return v < target ? Math.min(v + amount, target) : Math.max(v - amount, target); }
 
   function collideX() {
@@ -295,7 +533,7 @@
     }
   }
 
-  function collideY(prevBottom) {
+  function collideY(prevTop, prevBottom) {
     const left = Math.floor(player.x / TILE), right = Math.floor((player.x + player.w - 1) / TILE);
     player.onGround = false;
     if (player.vy >= 0) {
@@ -309,12 +547,14 @@
       }
     } else {
       const ty = Math.floor(player.y / TILE);
-      // 頭がいちばん重なっているブロックをたたく
+      // 頭がいちばん重なっているブロックをたたく（かくしブロックは下からだけ当たる）
       let hit = null, best = -1;
       for (let tx = left; tx <= right; tx++) {
-        if (!isSolid(tileAt(tx, ty))) continue;
-        const overlap = Math.min(player.x + player.w, (tx + 1) * TILE) - Math.max(player.x, tx * TILE);
-        if (overlap > best) { best = overlap; hit = tx; }
+        const c = tileAt(tx, ty);
+        const hiddenOk = c === 'H' && prevTop >= (ty + 1) * TILE - 0.5;
+        if (!isSolid(c) && !hiddenOk) continue;
+        const ov = Math.min(player.x + player.w, (tx + 1) * TILE) - Math.max(player.x, tx * TILE);
+        if (ov > best) { best = ov; hit = tx; }
       }
       if (hit !== null) {
         player.y = (ty + 1) * TILE; player.vy = 0;
@@ -323,35 +563,12 @@
     }
   }
 
-  function hitBlock(tx, ty) {
-    const c = level[ty][tx];
-    if (c !== 'B' && c !== 'P') return;
-    bumps.push({ tx, ty, t: 0 });
-    // 試作：中身はすべてハート切手1枚（Step 2以降でアイテムを入れる）
-    giveStamp(tx * TILE + 2, ty * TILE - 14, true);
-    if (c === 'B') level[ty][tx] = 'U';
-    else {
-      const key = tx + ',' + ty;
-      parcelHits[key] = (parcelHits[key] || 0) + 1;
-      if (parcelHits[key] >= 10) level[ty][tx] = 'U';
-    }
-  }
-  const parcelHits = {};
-
-  function giveStamp(x, y, popup) {
-    stampCount++; updateStampHud();
-    if (popup) particles.push({ kind: 'stamp', x, y, vy: -140, t: 0 });
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2;
-      particles.push({ kind: 'spark', x: x + 6, y: y + 6, vx: Math.cos(a) * 50, vy: Math.sin(a) * 50, t: 0 });
-    }
-  }
-
-  function update(dt) {
+  function updatePlayer(dt) {
     // ---- 横の動き
     const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (dir) player.face = dir;
-    const top = input.dash ? PHYS.dash : PHYS.run;
+    let top = input.dash ? PHYS.dash : PHYS.run;
+    if (run.invT > 0) top *= 1.1;                       // むてき中は少し速い
     let accel = player.onGround ? (dir ? PHYS.accel : PHYS.decel) : PHYS.air;
     // ダッシュをやめたときは、少しずつ歩く速さにもどす（急ブレーキにしない）
     if (dir && Math.abs(player.vx) > top && Math.sign(player.vx) === dir) accel = 260;
@@ -364,37 +581,57 @@
     jumpPrev = input.jump;
     player.buffer = jumpPressed ? PHYS.buffer : Math.max(0, player.buffer - dt);
     player.coyote = player.onGround ? PHYS.coyote : Math.max(0, player.coyote - dt);
+    if (player.onGround) player.usedDouble = false;
     if (player.buffer > 0 && player.coyote > 0) {
       // 速く走っているほど高く跳べる（歩きの速さ以下は通常ジャンプ）
       const k = Math.max(0, Math.min(1, (Math.abs(player.vx) - PHYS.run) / (PHYS.dash - PHYS.run)));
       player.vy = -lerp(PHYS.jump, PHYS.dashJump, k); player.buffer = 0; player.coyote = 0;
       player.onGround = false; player.jumping = true;
+    } else if (jumpPressed && !player.onGround && run.power === 'boots' && !player.usedDouble) {
+      // バネぐつ：空中でもう1回ジャンプ
+      player.vy = -PHYS.doubleJump; player.usedDouble = true; player.jumping = true; player.buffer = 0;
+      for (let i = 0; i < 6; i++) {
+        particles.push({ kind: 'dust', x: player.x + player.w / 2 + (i - 2.5) * 3, y: player.y + player.h, vx: (i - 2.5) * 12, vy: 20, t: 0, life: 0.3 });
+      }
     }
     if (player.vy >= 0) player.jumping = false;
 
     // ---- 重力（押している長さで高さが変わる）
     const g = (player.vy < 0 && input.jump && player.jumping) ? PHYS.gUp : PHYS.gDown;
-    player.vy = Math.min(player.vy + g * dt, PHYS.maxFall);
+    player.gliding = run.power === 'plane' && !player.onGround && player.vy > 0 && input.jump;
+    const maxFall = player.gliding ? PHYS.glideFall : PHYS.maxFall;
+    player.vy = Math.min(player.vy + g * dt, maxFall);
+
+    // ---- ランタン：光の玉を投げる（画面に2つまで）
+    const throwPressed = input.throw && !throwPrev;
+    throwPrev = input.throw;
+    if (throwPressed && run.power === 'lantern' && balls.length < 2) {
+      balls.push({ x: player.x + player.w / 2 + player.face * 6 - 3, y: player.y + 6, w: 6, h: 6, vx: player.face * 170, vy: 40, t: 0 });
+    }
 
     // ---- 移動と当たり判定
     player.x += player.vx * dt; collideX();
-    const prevBottom = player.y + player.h;
-    player.y += player.vy * dt; collideY(prevBottom);
+    const prevTop = player.y;
+    player.prevBottom = player.y + player.h;
+    player.y += player.vy * dt; collideY(prevTop, player.prevBottom);
 
     // ---- 切手を拾う
     const l = Math.floor(player.x / TILE), r = Math.floor((player.x + player.w - 1) / TILE);
     const t = Math.floor(player.y / TILE), b = Math.floor((player.y + player.h - 1) / TILE);
     for (let ty = t; ty <= b; ty++) for (let tx = l; tx <= r; tx++) {
-      if (tileAt(tx, ty) === '*') { level[ty][tx] = '.'; giveStamp(tx * TILE + 2, ty * TILE + 2, false); }
+      if (tileAt(tx, ty) === '*') { level[ty][tx] = '.'; addStamps(1, tx * TILE + 2, ty * TILE + 2); }
     }
 
     // ---- 穴に落ちた
-    if (player.y > ROWS * TILE + 40) respawn();
+    if (player.y > ROWS * TILE + 24) { run.hearts = 0; updateHud(); miss(); }
+
+    // ---- 中間ポスト
+    if (!run.checkpoint && player.x > CHECKPOINT.x) { run.checkpoint = true; popText('中間ポスト！', '#ffec96'); }
 
     // ---- ゴール
     if (player.x + player.w > goal.x + 2 && player.x < goal.x + goal.w - 2 && player.y + player.h > goal.y) {
       state = 'clear';
-      document.getElementById('clear-stamps').textContent = stampCount;
+      document.getElementById('clear-stamps').textContent = run.stamps;
       clearMenu.hidden = false;
     }
 
@@ -404,12 +641,52 @@
       if (dustT <= 0) {
         dustT = 0.06;
         particles.push({ kind: 'dust', x: player.x + player.w / 2 - player.face * 6, y: player.y + player.h - 2,
-          vx: -player.face * 20, vy: -15, t: 0 });
+          vx: -player.face * 20, vy: -15, t: 0, life: 0.3 });
       }
     }
-
-    // ---- アニメ・カメラ・相棒
     player.animT += Math.abs(player.vx) * dt;
+  }
+
+  function updateItems(dt) {
+    for (const it of items) {
+      if (it.rise < 1) { it.rise = Math.min(1, it.rise + dt / 0.35); it.y = it.baseY - 16 * it.rise; continue; }
+      if (overlap(player, { x: it.x + 2, y: it.y + 2, w: 12, h: 14 })) { it.taken = true; collect(it.kind); }
+    }
+    items = items.filter(it => !it.taken);
+  }
+
+  function updateBalls(dt) {
+    for (const b of balls) {
+      b.t += dt;
+      const wall = moveBody(b, dt);
+      if (b.onGround) b.vy = -170;
+      for (const e of enemies) {
+        if (!e.dead && e.active && overlap(b, e)) { killEnemy(e, 'fall'); b.done = true; break; }
+      }
+      if (wall || b.t > 1.6 || b.y > ROWS * TILE) b.done = true;
+      if (b.done) particles.push({ kind: 'spark', x: b.x, y: b.y, vx: 0, vy: -30, t: 0, life: 0.25 });
+    }
+    balls = balls.filter(b => !b.done);
+  }
+
+  function update(dt) {
+    if (state === 'miss') {
+      missT -= dt;
+      player.vy += PHYS.gDown * 0.6 * dt; player.y += player.vy * dt;
+      if (missT <= 0) afterMiss();
+      updateParticles(dt);
+      return;
+    }
+    updatePlayer(dt);
+    if (state !== 'play') return;
+    updateEnemies(dt);
+    updateItems(dt);
+    updateBalls(dt);
+
+    if (run.invT > 0) run.invT = Math.max(0, run.invT - dt);
+    if (run.hurtT > 0) run.hurtT = Math.max(0, run.hurtT - dt);
+
+    // ---- カメラ・相棒
     const targetCam = Math.max(0, Math.min(player.x + player.w / 2 - viewW * 0.42, LEVEL_W * TILE - viewW));
     camX = lerp(camX, targetCam, Math.min(1, dt * 8));
     pocchi.t += dt;
@@ -417,19 +694,89 @@
     pocchi.x = lerp(pocchi.x, px, Math.min(1, dt * 4));
     pocchi.y = lerp(pocchi.y, py, Math.min(1, dt * 4));
 
-    for (const p of particles) {
-      p.t += dt;
-      if (p.kind === 'stamp') { p.y += p.vy * dt; p.vy += 500 * dt; }
-      else { p.x += p.vx * dt; p.y += p.vy * dt; }
-    }
-    for (let i = particles.length - 1; i >= 0; i--) if (particles[i].t > (particles[i].kind === 'stamp' ? 0.45 : 0.3)) particles.splice(i, 1);
+    updateParticles(dt);
     for (const bm of bumps) bm.t += dt;
     for (let i = bumps.length - 1; i >= 0; i--) if (bumps[i].t > 0.15) bumps.splice(i, 1);
     if (fadeT > 0) fadeT -= dt;
   }
 
+  function updateParticles(dt) {
+    for (const p of particles) {
+      p.t += dt;
+      if (p.kind === 'stamp') { p.y += p.vy * dt; p.vy += 500 * dt; }
+      else if (p.kind === 'text') { p.y -= 18 * dt; }
+      else { p.x += p.vx * dt; p.y += p.vy * dt; }
+    }
+    for (let i = particles.length - 1; i >= 0; i--) if (particles[i].t > particles[i].life) particles.splice(i, 1);
+  }
+
   // ------------------------------------------------------------------ 描画
   let time = 0;
+  const RAINBOW = ['#ff5a5a', '#ffaa3c', '#ffe650', '#6edc5a', '#5aa0ff', '#be6eff'];
+  const pc = document.createElement('canvas'); pc.width = 40; pc.height = 40;
+  const pg = pc.getContext('2d');
+
+  // 向きに合わせて左右反転した位置に重ねる
+  function layer(name, x, y, base) {
+    const left = player.face < 0;
+    const img = SPR[name + (left ? '_L' : '')];
+    const dx = left ? base.width - x - img.width : x;
+    pg.drawImage(img, 12 + dx, 12 + y);
+  }
+
+  function drawPlayer(camY) {
+    let key = 'STAND';
+    if (!player.onGround) key = 'JUMP';
+    else if (Math.abs(player.vx) > 8) key = (Math.floor(player.animT / (Math.abs(player.vx) > PHYS.run + 10 ? 14 : 10)) % 2) ? 'RUN' : 'STAND';
+    const base = SPR[(run.power === 'boots' ? 'B_' : '') + key + (player.face < 0 ? '_L' : '')];
+    pg.clearRect(0, 0, pc.width, pc.height);
+    if (run.power === 'plane') layer(player.gliding ? 'WINGS_OPEN' : 'WINGS', player.gliding ? -8 : -5, 9, base);
+    pg.drawImage(base, 12, 12);
+    if (run.bag) layer('BAGOVER', 0, 12, base);
+    if (run.power === 'lantern') layer('LANTERN_S', 12, key === 'JUMP' ? 2 : 12, base);
+    if (run.invT > 0) {
+      pg.save();
+      pg.globalCompositeOperation = 'source-atop';
+      pg.globalAlpha = 0.5;
+      pg.fillStyle = RAINBOW[Math.floor(time * 12) % RAINBOW.length];
+      pg.fillRect(0, 0, pc.width, pc.height);
+      pg.restore();
+    }
+    // 点めつ：ダメージ直後、むてきの終わり間近
+    const blinkHurt = run.hurtT > 0 && Math.floor(time * 15) % 2 === 0;
+    const blinkInv = run.invT > 0 && run.invT < RULE.invWarn && Math.floor(time * 10) % 2 === 0;
+    if (blinkHurt) return;
+    const sx = Math.round(player.x + player.w / 2 - base.width / 2 - camX) - 12;
+    const sy = Math.round(player.y + player.h - base.height + 1 - camY) - 12;
+    if (player.onGround && state === 'play') {
+      ctx.fillStyle = 'rgba(30,40,20,.3)';
+      ctx.beginPath(); ctx.ellipse(Math.round(player.x + player.w / 2 - camX), Math.round(player.y + player.h - camY), 7, 1.5, 0, 0, 7); ctx.fill();
+    }
+    if (blinkInv) ctx.globalAlpha = 0.5;
+    ctx.drawImage(pc, sx, sy);
+    ctx.globalAlpha = 1;
+    if (run.invT > 0 && Math.floor(time * 20) % 3 === 0) {
+      particles.push({ kind: 'spark', x: player.x + Math.random() * 14 - 2, y: player.y + Math.random() * 18, vx: 0, vy: -20, t: 0, life: 0.3 });
+    }
+  }
+
+  function drawCheckpoint(camY) {
+    const x = Math.round(CHECKPOINT.x - camX), y = CHECKPOINT.y - camY;
+    ctx.fillStyle = '#646474'; ctx.fillRect(x, y - 28, 2, 28);
+    ctx.fillStyle = '#9696a2'; ctx.fillRect(x, y - 28, 1, 28);
+    if (run.checkpoint) {
+      const wave = Math.round(Math.sin(time * 6));
+      ctx.fillStyle = '#281c34'; ctx.fillRect(x + 2, y - 28 + wave, 12, 9);
+      ctx.fillStyle = '#fff'; ctx.fillRect(x + 3, y - 27 + wave, 10, 7);
+      ctx.fillStyle = '#d6e2f0'; ctx.fillRect(x + 3, y - 27 + wave, 10, 1);
+      ctx.fillStyle = '#e23034'; ctx.fillRect(x + 7, y - 25 + wave, 2, 2);
+    } else {
+      ctx.fillStyle = '#6e7086'; ctx.fillRect(x + 2, y - 28, 10, 7);
+      ctx.fillStyle = '#a0a2b6'; ctx.fillRect(x + 3, y - 27, 8, 5);
+    }
+    ctx.fillStyle = '#281c34'; ctx.fillRect(x - 2, y - 2, 6, 2);
+  }
+
   function draw() {
     // 地面の上面を、下のボタンより上（画面下から約46ドット）に置く
     const camY = 10 * TILE - (viewH - 46);
@@ -464,19 +811,35 @@
       ctx.fillStyle = '#8cd678'; ctx.fillRect(x, hy, 1, 1);
     }
 
+    // ブロックから出てくるアイテム（ブロックの後ろから出るように先にかく）
+    for (const it of items) {
+      const img = SPR[ITEM_SPR[it.kind]];
+      const bob = it.rise >= 1 ? Math.round(Math.sin(time * 4) * 1) : 0;
+      ctx.drawImage(img, Math.round(it.x + 8 - img.width / 2 - cx), Math.round(it.y + 16 - img.height - camY + bob));
+    }
+
     // タイル
     const x0 = Math.floor(cx / TILE), x1 = Math.min(LEVEL_W - 1, Math.floor((cx + viewW) / TILE));
     for (let ty = 0; ty < ROWS; ty++) for (let tx = x0; tx <= x1; tx++) {
       const c = level[ty][tx];
-      if (c === '.') continue;
-      let dx = tx * TILE - cx, dy = ty * TILE - camY;
+      if (c === '.' || c === 'H') continue;
+      const dx = tx * TILE - cx;
+      let dy = ty * TILE - camY;
       const bm = bumps.find(b => b.tx === tx && b.ty === ty);
       if (bm) dy -= Math.round(Math.sin((bm.t / 0.15) * Math.PI) * 4);
       if (c === '#') {
         const above = tileAt(tx, ty - 1);
         ctx.drawImage(above === '#' ? GMID[tx % 3] : GTOP[tx % 3], dx, dy);
       } else if (c === '=') ctx.drawImage(PLANK, dx, dy);
-      else if (c === 'B') ctx.drawImage(SPR.LETTERBLK, dx, dy);
+      else if (c === 'B') {
+        ctx.drawImage(SPR.LETTERBLK, dx, dy);
+        // パワーアップ入りは、ときどきキラッと光る
+        const what = contents[tx + ',' + ty];
+        if (what && what !== 'stamp' && (time + tx * 0.37) % 1.6 < 0.25) {
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(dx + 12, dy + 1, 1, 5); ctx.fillRect(dx + 10, dy + 3, 5, 1);
+        }
+      }
       else if (c === 'P') ctx.drawImage(SPR.PARCEL, dx, dy);
       else if (c === 'U') ctx.drawImage(USED, dx, dy);
       else if (c === '*') {
@@ -484,15 +847,40 @@
         ctx.drawImage(SPR.STAMP, dx + 1, dy + 1 + bob);
       }
     }
-
     // ステージより下も土で埋める（画面の下まで）
     for (let tx = x0; tx <= x1; tx++) {
       if (level[ROWS - 1][tx] !== '#') continue;
       for (let y = ROWS * TILE - camY; y < viewH; y += TILE) ctx.drawImage(GMID[(tx + 1) % 3], tx * TILE - cx, y);
     }
 
+    drawCheckpoint(camY);
     // ゴールのポスト
     ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3);
+
+    // 敵
+    for (const e of enemies) {
+      if (!e.active) continue;
+      const img = SPR[(e.kind === 'moyan' ? 'MOYAN' : 'TOGE') + (e.vx > 0 ? '_L' : '')];
+      const ex = Math.round(e.x + e.w / 2 - img.width / 2 - cx);
+      const ey = Math.round(e.y + e.h - img.height - camY);
+      if (e.dead === 'squash') {
+        ctx.drawImage(img, ex, ey + img.height - 6, img.width, 6);
+      } else if (e.dead === 'fall') {
+        ctx.save(); ctx.translate(ex + img.width / 2, ey + img.height / 2); ctx.scale(1, -1);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore();
+      } else {
+        const bob = Math.floor(time * 6 + e.x) % 2;
+        ctx.drawImage(img, ex, ey - bob);
+      }
+    }
+
+    // 光の玉
+    for (const b of balls) {
+      const bx = Math.round(b.x + 3 - cx), by = Math.round(b.y + 3 - camY);
+      ctx.fillStyle = 'rgba(255,240,150,.4)'; ctx.beginPath(); ctx.arc(bx, by, 6, 0, 7); ctx.fill();
+      ctx.fillStyle = '#ffe650'; ctx.beginPath(); ctx.arc(bx, by, 3, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillRect(bx - 1, by - 1, 2, 2);
+    }
 
     // 相棒ポッチ（光）
     const pxs = Math.round(pocchi.x - cx), pys = Math.round(pocchi.y - camY);
@@ -500,44 +888,74 @@
     ctx.drawImage(SPR.POCCHI, pxs, pys);
 
     // 主人公
-    let key = 'STAND';
-    if (!player.onGround) key = 'JUMP';
-    else if (Math.abs(player.vx) > 8) key = (Math.floor(player.animT / (Math.abs(player.vx) > PHYS.run + 10 ? 14 : 10)) % 2) ? 'RUN' : 'STAND';
-    const img = SPR[key + (player.face < 0 ? '_L' : '')];
-    const sx = Math.round(player.x + player.w / 2 - img.width / 2 - cx);
-    const sy = Math.round(player.y + player.h - img.height + 1 - camY);
-    if (player.onGround) {
-      ctx.fillStyle = 'rgba(30,40,20,.3)';
-      ctx.beginPath(); ctx.ellipse(Math.round(player.x + player.w / 2 - cx), Math.round(player.y + player.h - camY), 7, 1.5, 0, 0, 7); ctx.fill();
-    }
-    ctx.drawImage(img, sx, sy);
+    drawPlayer(camY);
 
     // エフェクト
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 9px "Hiragino Sans", "Noto Sans JP", sans-serif';
     for (const p of particles) {
-      if (p.kind === 'stamp') ctx.drawImage(SPR.STAMP, Math.round(p.x - cx), Math.round(p.y - camY));
+      const px = Math.round(p.x - cx), py = Math.round(p.y - camY);
+      if (p.kind === 'stamp') ctx.drawImage(SPR.STAMP, px, py);
       else if (p.kind === 'dust') {
-        ctx.fillStyle = `rgba(236,220,196,${1 - p.t / 0.3})`;
+        ctx.fillStyle = `rgba(236,220,196,${1 - p.t / p.life})`;
         const r = 1 + Math.round(p.t * 10);
-        ctx.fillRect(Math.round(p.x - cx) - r, Math.round(p.y - camY) - r, r * 2, r * 2);
-      }
-      else { ctx.fillStyle = '#fff4aa'; ctx.fillRect(Math.round(p.x - cx), Math.round(p.y - camY), 2, 2); }
+        ctx.fillRect(px - r, py - r, r * 2, r * 2);
+      } else if (p.kind === 'text') {
+        ctx.globalAlpha = Math.min(1, (p.life - p.t) * 3);
+        ctx.lineWidth = 3; ctx.strokeStyle = '#281c34'; ctx.strokeText(p.text, px, py);
+        ctx.fillStyle = p.color; ctx.fillText(p.text, px, py);
+        ctx.globalAlpha = 1;
+      } else { ctx.fillStyle = '#fff4aa'; ctx.fillRect(px, py, 2, 2); }
     }
 
+    if (state === 'miss') {
+      ctx.fillStyle = `rgba(16,20,40,${Math.min(0.6, (1.2 - missT) * 0.8)})`;
+      ctx.fillRect(0, 0, viewW, viewH);
+      ctx.font = 'bold 16px "Hiragino Sans", "Noto Sans JP", sans-serif';
+      ctx.lineWidth = 4; ctx.strokeStyle = '#281c34'; ctx.strokeText('ミス！', viewW / 2, viewH / 2 - 10);
+      ctx.fillStyle = '#fff'; ctx.fillText('ミス！', viewW / 2, viewH / 2 - 10);
+    }
     if (fadeT > 0) { ctx.fillStyle = `rgba(16,20,40,${fadeT * 1.6})`; ctx.fillRect(0, 0, viewW, viewH); }
   }
 
   // ------------------------------------------------------------------ HUD・メニュー
   const stampsEl = document.getElementById('stamps');
-  function updateStampHud() { stampsEl.textContent = '× ' + stampCount; }
-  (() => {
-    const ic = document.getElementById('stamp-icon').getContext('2d');
-    ic.drawImage(SPR.STAMP, 0, 0);
-  })();
+  const livesEl = document.getElementById('lives');
+  const heartEls = [...document.querySelectorAll('#hearts .heart')];
+  const itemCanvas = document.getElementById('item-icons');
+  const itemCtx = itemCanvas.getContext('2d');
+  const throwBtn = document.getElementById('btn-throw');
+  document.getElementById('stamp-icon').getContext('2d').drawImage(SPR.STAMP, 0, 0);
+
+  function updateHud() {
+    stampsEl.textContent = '× ' + run.stamps;
+    livesEl.textContent = '× ' + run.lives;
+    heartEls.forEach((h, i) => h.classList.toggle('empty', i >= run.hearts));
+    // 持っているもの（カバン・パワーアップ）
+    itemCtx.clearRect(0, 0, itemCanvas.width, itemCanvas.height);
+    const icons = [];
+    if (run.bag) icons.push('BIGBAG');
+    if (run.power) icons.push(ITEM_SPR[run.power]);
+    icons.forEach((k, i) => {
+      const img = SPR[k];
+      itemCtx.drawImage(img, i * 18 + Math.floor((16 - img.width) / 2), Math.floor((16 - img.height) / 2));
+    });
+    itemCanvas.parentElement.hidden = icons.length === 0;
+    itemCanvas.width = Math.max(1, icons.length) * 18 - 2;
+    itemCanvas.style.width = itemCanvas.width * 1.5 + 'px';
+    icons.forEach((k, i) => {
+      const img = SPR[k];
+      itemCtx.drawImage(img, i * 18 + Math.floor((16 - img.width) / 2), Math.floor((16 - img.height) / 2));
+    });
+    throwBtn.hidden = run.power !== 'lantern';
+    if (throwBtn.hidden) { touchKeys.throw = false; }
+  }
 
   const pauseMenu = document.getElementById('pause-menu');
   const clearMenu = document.getElementById('clear-menu');
+  const overMenu = document.getElementById('over-menu');
   function togglePause(force) {
-    if (state === 'clear') return;
+    if (state !== 'play' && state !== 'pause') return;
     const toPause = force !== undefined ? force : state !== 'pause';
     state = toPause ? 'pause' : 'play';
     pauseMenu.hidden = !toPause;
@@ -547,8 +965,9 @@
   const tap = (id, fn) => document.getElementById(id).addEventListener('click', fn);
   tap('btn-pause', () => togglePause());
   tap('btn-resume', () => togglePause(false));
-  tap('btn-restart', reset);
-  tap('btn-again', reset);
+  tap('btn-restart', newGame);
+  tap('btn-again', newGame);
+  tap('btn-over', newGame);
   // アプリを切りかえたら自動で一時停止
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') togglePause(true); });
 
@@ -556,7 +975,7 @@
   let last = performance.now(), acc = 0;
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (state === 'play') {
+    if (state === 'play' || state === 'miss') {
       acc += dt;
       while (acc >= STEP) { update(STEP); acc -= STEP; }
       time += dt;
@@ -567,9 +986,13 @@
 
   addEventListener('resize', resize);
   resize();
-  reset();
+  newGame();
   requestAnimationFrame(frame);
 
   // テスト用（ブラウザの開発ツールから状態を見られる）
-  window.__game = { player, level, keys: keyKeys, sync: syncInput, get stamps() { return stampCount; }, get state() { return state; } };
+  window.__game = {
+    player, run, keys: keyKeys, sync: syncInput, collect, damage,
+    get level() { return level; }, get enemies() { return enemies; }, get items() { return items; },
+    get balls() { return balls; }, get state() { return state; }, get stamps() { return run.stamps; },
+  };
 })();

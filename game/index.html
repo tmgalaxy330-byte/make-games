@@ -15,6 +15,8 @@
 <div id="hud">
   <div class="pill" id="hearts"><span class="heart"></span><span class="heart"></span><span class="heart"></span></div>
   <div class="pill"><canvas id="stamp-icon" width="13" height="13"></canvas><b id="stamps">× 0</b></div>
+  <div class="pill"><small>のこり</small><b id="lives">× 3</b></div>
+  <div class="pill" hidden><canvas id="item-icons" width="34" height="16"></canvas></div>
   <div class="spacer"></div>
   <div class="pill"><small>WORLD</small><b>1-1</b></div>
   <button class="pill icon" id="btn-pause" aria-label="一時停止"><i></i><i></i></button>
@@ -25,6 +27,7 @@
   <div class="btn arrow" id="btn-right" data-key="right">▶</div>
   <div class="btn dash" id="btn-dash" data-key="dash">DASH</div>
   <div class="btn jump" id="btn-jump" data-key="jump">JUMP</div>
+  <div class="btn throw" id="btn-throw" data-key="throw" hidden>なげる</div>
 </div>
 
 <div class="overlay" id="pause-menu" hidden>
@@ -40,6 +43,14 @@
     <h2>配達完了！</h2>
     <p>あつめた切手：<b id="clear-stamps">0</b> 枚</p>
     <button id="btn-again">もういちど</button>
+  </div>
+</div>
+
+<div class="overlay" id="over-menu" hidden>
+  <div class="panel">
+    <h2>ゲームオーバー</h2>
+    <p>もういちど配達にちょうせんしよう！</p>
+    <button id="btn-over">さいしょから</button>
   </div>
 </div>
 
