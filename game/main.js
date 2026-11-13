@@ -121,6 +121,36 @@
     for (let y = 0; y < 10; y++) set(LEVEL_W - 1, y, '#');   // 右はしの壁
   }
 
+  // ワールド1のステージ一覧（playable=false は準備中）
+  const STAGES = [
+    { id: '1-1', label: '1-1', playable: true },
+    { id: '1-2', label: '1-2', playable: false },
+    { id: '1-3', label: '1-3', playable: false },
+    { id: '1-B', label: 'BOSS', playable: false, boss: true },
+  ];
+  let stageIndex = 0;
+
+  // ------------------------------------------------------------------ セーブ（この端末のブラウザに保存）
+  const SAVE_KEY = 'mister-postman-save-v1';
+  const emptySave = () => ({ cleared: {}, best: {}, last: 0, prologue: false });
+  let save = emptySave();
+  function loadSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) save = Object.assign(emptySave(), JSON.parse(raw));
+    } catch (e) { save = emptySave(); }
+  }
+  function writeSave() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* 保存できない環境でも遊べる */ }
+  }
+  const hasSave = () => save.prologue || Object.keys(save.cleared).length > 0;
+
+  // 色をうばわれた世界：クリアするまで色がうすい
+  function setSat(v, animate) {
+    canvas.style.transition = animate ? 'filter 1.4s ease-out' : 'none';
+    canvas.style.filter = `saturate(${v})`;
+  }
+
   const isSolid = c => c === '#' || c === 'B' || c === 'P' || c === 'U';
   const tileAt = (tx, ty) => (tx < 0 || tx >= LEVEL_W) ? '#' : (ty < 0 || ty >= ROWS) ? '.' : level[ty][tx];
   const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -258,7 +288,9 @@
 
   function onTouch(e) {
     if (e.target.closest && e.target.closest('button')) return;   // メニューのボタンは通常どおり
+    if (state === 'title' || state === 'map') return;
     e.preventDefault();
+    if (state === 'dialog') { if (e.type === 'touchstart' && e.target.closest('#dialog-box')) nextLine(); return; }
     for (const k in touchKeys) touchKeys[k] = false;
     for (const t of e.touches) {
       const k = hitTest(t.clientX, t.clientY);
@@ -279,6 +311,7 @@
     KeyX: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyC: 'throw' };
   addEventListener('keydown', e => {
     if (e.code === 'Escape' || e.code === 'KeyP') { togglePause(); return; }
+    if (state === 'dialog' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyZ')) { e.preventDefault(); nextLine(); return; }
     const k = KEYMAP[e.code]; if (!k) return;
     e.preventDefault(); if (e.repeat) return;
     keyKeys[k] = true; syncInput();
@@ -324,6 +357,7 @@
   const bumps = [];
   let dustT = 0;
   let postBounce = 0;
+  let showActors = true;
 
   function placePlayer() {
     const p = run.checkpoint ? CHECKPOINT : START;
@@ -334,12 +368,20 @@
     camX = Math.max(0, Math.min(player.x - viewW * 0.42, LEVEL_W * TILE - viewW));
   }
 
-  // 最初から（タイトルにもどる代わり）
-  function newGame() {
+  function resetRun() {
     run.hearts = RULE.hearts; run.lives = RULE.lives; run.stamps = 0;
     run.power = null; run.bag = false; run.invT = 0; run.hurtT = 0; run.checkpoint = false;
-    startLevel();
+  }
+
+  // マップからステージに入る（stamps はステージごとに数える）
+  function enterStage(i) {
+    stageIndex = i;
+    run.stamps = 0; run.checkpoint = false;
+    run.hearts = RULE.hearts; run.invT = 0; run.hurtT = 0;
     setDash(false);
+    document.getElementById('world-label').textContent = STAGES[i].label;
+    save.last = i; writeSave();
+    startLevel();
   }
 
   // ステージを作り直して、スタート地点（または中間ポスト）から
@@ -348,8 +390,11 @@
     items = []; balls = []; particles.length = 0; bumps.length = 0;
     placePlayer();
     state = 'play';
+    showActors = true;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
-    document.body.classList.remove('cutscene');
+    for (const sc of [titleScreen, mapScreen, dialogEl]) sc.hidden = true;
+    document.body.classList.remove('cutscene', 'menu');
+    setSat(save.cleared[STAGES[stageIndex].id] ? 1 : 0.35, false);
     updateHud();
   }
 
@@ -675,8 +720,14 @@
   let goalT = 0, fwNext = 0;
   const FW_COLORS = ['#ff5a5a', '#ffaa3c', '#ffe650', '#6edc5a', '#5aa0ff', '#be6eff', '#ffffff', '#ff8cc8'];
 
+  let colorDone = false;
   function startGoal() {
-    state = 'goal'; goalT = 0; fwNext = GOAL.fireworks;
+    state = 'goal'; goalT = 0; fwNext = GOAL.fireworks; colorDone = false;
+    const id = STAGES[stageIndex].id;
+    save.cleared[id] = true;
+    save.best[id] = Math.max(save.best[id] || 0, run.stamps);
+    save.last = Math.min(stageIndex + 1, STAGES.length - 1);
+    writeSave();
     player.vx = 0; player.face = 1;
     player.x = Math.min(player.x, goal.x - player.w - 1);    // ポストの横に立つ
     run.invT = 0; run.hurtT = 0;
@@ -698,6 +749,7 @@
 
   function updateGoal(dt) {
     goalT += dt;
+    if (!colorDone && goalT >= GOAL.rainbow) { colorDone = true; setSat(1, true); }   // 色がもどる
     // 主人公：その場でうれしそうにぴょんぴょん
     player.vy = Math.min(player.vy + PHYS.gDown * dt, PHYS.maxFall);
     player.y += player.vy * dt;
@@ -981,6 +1033,11 @@
       ctx.fillStyle = '#fff'; ctx.fillRect(bx - 1, by - 1, 2, 2);
     }
 
+    if (showActors) drawActors(camY, cx);
+    finishDraw(camY, cx);
+  }
+
+  function drawActors(camY, cx) {
     // 相棒ポッチ（光）
     const pxs = Math.round(pocchi.x - cx), pys = Math.round(pocchi.y - camY);
     ctx.fillStyle = 'rgba(255,250,200,.35)'; ctx.beginPath(); ctx.arc(pxs + 9, pys + 7, 11, 0, 7); ctx.fill();
@@ -988,6 +1045,9 @@
 
     // 主人公
     drawPlayer(camY);
+  }
+
+  function finishDraw(camY, cx) {
 
     // エフェクト
     ctx.textAlign = 'center';
@@ -1079,9 +1139,152 @@
   const tap = (id, fn) => document.getElementById(id).addEventListener('click', fn);
   tap('btn-pause', () => togglePause());
   tap('btn-resume', () => togglePause(false));
-  tap('btn-restart', newGame);
-  tap('btn-again', newGame);
-  tap('btn-over', newGame);
+  const retry = () => { resetRunLivesIfOver(); enterStage(stageIndex); };
+  function resetRunLivesIfOver() { if (state === 'over') { run.lives = RULE.lives; run.power = null; run.bag = false; } }
+  tap('btn-restart', retry);
+  tap('btn-over', retry);
+  tap('btn-replay', () => enterStage(stageIndex));
+  tap('btn-next', () => enterMap(Math.min(stageIndex + 1, STAGES.length - 1), stageIndex));
+  tap('btn-pause-map', () => enterMap(stageIndex));
+  tap('btn-over-map', () => { resetRunLivesIfOver(); enterMap(stageIndex); });
+
+  // ------------------------------------------------------------------ タイトル・マップ・会話
+  const titleScreen = document.getElementById('title-screen');
+  const mapScreen = document.getElementById('map-screen');
+  const dialogEl = document.getElementById('dialog');
+  const confirmNew = document.getElementById('confirm-new');
+  const playBtn = document.getElementById('btn-play');
+  const mapNodes = document.getElementById('map-nodes');
+  const mapHero = document.getElementById('map-hero');
+  const drawFace = (id, img) => {
+    const c = document.getElementById(id), g = c.getContext('2d');
+    c.width = img.width; c.height = img.height; g.clearRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0);
+  };
+  drawFace('title-hero', SPR.JUMP);
+  drawFace('map-hero', SPR.STAND);
+
+  function showMenuScene(el) {
+    for (const sc of [titleScreen, mapScreen, dialogEl]) sc.hidden = sc !== el;
+    for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
+    document.body.classList.add('menu');
+    document.body.classList.remove('cutscene');
+  }
+
+  function enterTitle() {
+    state = 'title'; showActors = false;
+    buildLevel(); enemies = []; items = []; particles.length = 0;
+    setSat(1, false);
+    showMenuScene(titleScreen);
+    confirmNew.hidden = true;
+    const can = hasSave();
+    document.getElementById('btn-continue').hidden = !can;
+    document.getElementById('btn-start').textContent = can ? 'NEW GAME' : 'START';
+    document.getElementById('btn-start').classList.toggle('sub', can);
+  }
+
+  function startNewGame() {
+    save = emptySave(); writeSave();
+    resetRun();
+    playDialog(PROLOGUE, () => { save.prologue = true; writeSave(); enterStage(0); });
+  }
+  tap('btn-start', () => { if (hasSave()) confirmNew.hidden = false; else startNewGame(); });
+  tap('btn-new-yes', startNewGame);
+  tap('btn-new-no', () => { confirmNew.hidden = true; });
+  tap('btn-continue', () => { resetRun(); enterMap(save.last || 0); });
+  tap('btn-title', enterTitle);
+  tap('btn-play', () => { if (STAGES[mapSel].playable && unlocked(mapSel)) enterStage(mapSel); });
+
+  let mapSel = 0;
+  const unlocked = i => i === 0 || !!save.cleared[STAGES[i - 1].id];
+  function enterMap(sel, from) {
+    state = 'map'; showActors = false;
+    buildLevel(); enemies = []; items = []; particles.length = 0;
+    setSat(save.cleared[STAGES[0].id] ? 1 : 0.35, false);
+    showMenuScene(mapScreen);
+    mapNodes.innerHTML = '';
+    STAGES.forEach((st, i) => {
+      const b = document.createElement('button');
+      const open = unlocked(i);
+      const cls = ['node'];
+      if (st.boss) cls.push('boss');
+      if (save.cleared[st.id]) cls.push('cleared');
+      else if (!open) cls.push('locked');
+      else if (!st.playable) cls.push('soon');
+      b.className = cls.join(' ');
+      b.id = 'node-' + st.id;
+      let info = '';
+      if (!st.playable) info = '<span class="info">SOON</span>';
+      else if (!open) info = '<span class="info">LOCK</span>';
+      else if (save.cleared[st.id]) info = `<span class="info gold">切手 ${save.best[st.id] || 0}</span>`;
+      else info = '<span class="info">NEW</span>';
+      b.innerHTML = `<span class="dot">${st.label}</span>${info}`;
+      b.addEventListener('click', () => selectNode(i));
+      mapNodes.appendChild(b);
+    });
+    // NEXT で来たときは、前のステージから歩いて移動
+    selectNode(from !== undefined ? from : sel, true);
+    if (from !== undefined && from !== sel) setTimeout(() => selectNode(sel), 250);
+  }
+
+  function selectNode(i, instant) {
+    if (!unlocked(i)) return;
+    mapSel = i;
+    [...mapNodes.children].forEach((n, k) => n.classList.toggle('sel', k === i));
+    const node = mapNodes.children[i];
+    const dot = node.querySelector('.dot');
+    const track = mapHero.parentElement.getBoundingClientRect(), d = dot.getBoundingClientRect();
+    const x = d.left - track.left + d.width / 2 - mapHero.offsetWidth / 2;
+    if (instant) { mapHero.style.transition = 'none'; mapHero.style.left = x + 'px'; void mapHero.offsetWidth; mapHero.style.transition = ''; }
+    else mapHero.style.left = x + 'px';
+    const st = STAGES[i];
+    playBtn.disabled = !st.playable;
+    playBtn.textContent = st.playable ? 'PLAY ' + st.label : 'COMING SOON';
+  }
+
+  // ---- 会話（1場面 2〜5往復）
+  const PROLOGUE = [
+    { who: 'postman', text: 'あれ？　島の色が消えてる！' },
+    { who: 'pocchi', text: 'たすけて！　男爵が灯台の光をうばったの。' },
+    { who: 'postman', text: '光がないと、橋がわたれない…。手紙が届けられないよ！' },
+    { who: 'pocchi', text: 'かけらを取りもどせば、光がもどるよ。' },
+    { who: 'postman', text: 'よし、配達に出発だ！' },
+  ];
+  const WHO = {
+    postman: { name: 'ポストマン', face: 'STAND', cls: '' },
+    pocchi: { name: 'ポッチ', face: 'POCCHI', cls: 'pocchi' },
+  };
+  let dlg = null;
+  const dlgName = document.getElementById('dialog-name');
+  const dlgText = document.getElementById('dialog-text');
+  function playDialog(lines, done) {
+    state = 'dialog'; showActors = false;
+    buildLevel(); enemies = []; items = []; particles.length = 0;
+    placePlayer(); showActors = true;
+    setSat(0, false);                          // 色が消えた世界
+    showMenuScene(dialogEl);
+    dlg = { lines, i: -1, done, shown: 0, full: true };
+    nextLine();
+  }
+  function nextLine() {
+    if (!dlg) return;
+    if (!dlg.full) { dlg.shown = dlg.lines[dlg.i].text.length; dlg.full = true; dlgText.textContent = dlg.lines[dlg.i].text; return; }
+    dlg.i++;
+    if (dlg.i >= dlg.lines.length) { const d = dlg.done; dlg = null; d(); return; }
+    const line = dlg.lines[dlg.i], w = WHO[line.who];
+    dlgName.textContent = w.name; dlgName.className = 'dialog-name ' + w.cls;
+    drawFace('dialog-face', SPR[w.face]);
+    dlg.shown = 0; dlg.full = false; dlg.acc = 0; dlgText.textContent = '';
+  }
+  function updateDialog(dt) {
+    if (!dlg || dlg.full) return;
+    dlg.acc += dt;
+    const text = dlg.lines[dlg.i].text;
+    const n = Math.min(text.length, Math.floor(dlg.acc / 0.045));
+    if (n !== dlg.shown) { dlg.shown = n; dlgText.textContent = text.slice(0, n); }
+    if (n >= text.length) dlg.full = true;
+  }
+  document.getElementById('dialog-box').addEventListener('click', nextLine);
+  tap('btn-skip', () => { if (dlg) { const d = dlg.done; dlg = null; d(); } });
   // アプリを切りかえたら自動で一時停止
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') togglePause(true); });
 
@@ -1093,14 +1296,28 @@
       acc += dt;
       while (acc >= STEP) { update(STEP); acc -= STEP; }
       time += dt;
-    } else acc = 0;
+    } else {
+      acc = 0;
+      if (state === 'title' || state === 'map') {
+        // 背景の世界をゆっくり流す
+        camX = (camX + 18 * dt) % (LEVEL_W * TILE - viewW - 20);
+        time += dt;
+      } else if (state === 'dialog') {
+        updateDialog(dt); time += dt;
+        pocchi.t += dt;
+        pocchi.x = lerp(pocchi.x, player.x + 22, Math.min(1, dt * 3));
+        pocchi.y = lerp(pocchi.y, player.y - 14 + Math.sin(pocchi.t * 3) * 3, Math.min(1, dt * 3));
+      }
+    }
     draw();
     requestAnimationFrame(frame);
   }
 
   addEventListener('resize', resize);
   resize();
-  newGame();
+  loadSave();
+  resetRun();
+  enterTitle();
   requestAnimationFrame(frame);
 
   // テスト用（ブラウザの開発ツールから状態を見られる）
@@ -1108,5 +1325,6 @@
     player, run, keys: keyKeys, sync: syncInput, collect, damage,
     get level() { return level; }, get enemies() { return enemies; }, get items() { return items; },
     get balls() { return balls; }, get state() { return state; }, get stamps() { return run.stamps; },
+    get save() { return save; }, enterStage, enterMap, enterTitle,
   };
 })();

@@ -7,6 +7,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#5c96fa">
 <title>ミスターポストマン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +20,7 @@
   <div class="pill"><small>のこり</small><b id="lives">× 3</b></div>
   <div class="pill" hidden><canvas id="item-icons" width="34" height="16"></canvas></div>
   <div class="spacer"></div>
-  <div class="pill"><small>WORLD</small><b>1-1</b></div>
+  <div class="pill"><small>WORLD</small><b id="world-label">1-1</b></div>
   <button class="pill icon" id="btn-pause" aria-label="一時停止"><i></i><i></i></button>
 </div>
 
@@ -32,24 +34,81 @@
 
 <div class="overlay" id="pause-menu" hidden>
   <div class="panel">
-    <h2>いちじていし</h2>
-    <button id="btn-resume">つづける</button>
-    <button id="btn-restart" class="sub">さいしょから</button>
+    <h2>PAUSE</h2>
+    <button id="btn-resume">RESUME</button>
+    <div class="row">
+      <button id="btn-restart" class="sub">RETRY</button>
+      <button id="btn-pause-map" class="sub">MAP</button>
+    </div>
   </div>
 </div>
 
 <div class="overlay" id="clear-menu" hidden>
   <div class="panel">
     <div class="result"><canvas id="clear-stamp-icon" width="13" height="13"></canvas><b>×</b><b id="clear-stamps">0</b></div>
-    <button id="btn-again">もういちど</button>
+    <div class="row">
+      <button id="btn-replay" class="sub">REPLAY</button>
+      <button id="btn-next">NEXT</button>
+    </div>
   </div>
 </div>
 
 <div class="overlay" id="over-menu" hidden>
   <div class="panel">
-    <h2>ゲームオーバー</h2>
+    <h2>GAME OVER</h2>
     <p>もういちど配達にちょうせんしよう！</p>
-    <button id="btn-over">さいしょから</button>
+    <div class="row">
+      <button id="btn-over-map" class="sub">MAP</button>
+      <button id="btn-over">RETRY</button>
+    </div>
+  </div>
+</div>
+
+<!-- タイトル -->
+<div class="scene" id="title-screen" hidden>
+  <div class="title-wrap">
+    <canvas id="title-hero" width="20" height="23"></canvas>
+    <h1 class="logo"><span class="logo-en">MISTER</span><span class="logo-en big">POSTMAN</span><span class="logo-ja">ミスターポストマン</span></h1>
+    <div class="title-buttons">
+      <button id="btn-continue" hidden>CONTINUE</button>
+      <button id="btn-start">START</button>
+    </div>
+  </div>
+  <div class="overlay" id="confirm-new" hidden>
+    <div class="panel">
+      <p>セーブを消して、はじめからにする？</p>
+      <div class="row">
+        <button id="btn-new-no" class="sub">NO</button>
+        <button id="btn-new-yes" class="danger">YES</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ステージ選択 -->
+<div class="scene" id="map-screen" hidden>
+  <div class="map-head"><small>WORLD 1</small><b>はじまりの草原島</b></div>
+  <div class="map-track">
+    <div class="map-line"></div>
+    <div class="map-nodes" id="map-nodes"></div>
+    <canvas id="map-hero" width="20" height="23"></canvas>
+  </div>
+  <div class="map-foot">
+    <button id="btn-title" class="sub">TITLE</button>
+    <button id="btn-play">PLAY</button>
+  </div>
+</div>
+
+<!-- 会話 -->
+<div class="scene" id="dialog" hidden>
+  <button id="btn-skip" class="skip">SKIP ▶▶</button>
+  <div class="dialog-box" id="dialog-box">
+    <canvas id="dialog-face" width="20" height="23"></canvas>
+    <div class="dialog-body">
+      <div class="dialog-name" id="dialog-name"></div>
+      <div class="dialog-text" id="dialog-text"></div>
+    </div>
+    <div class="dialog-next" id="dialog-next">▼</div>
   </div>
 </div>
 
