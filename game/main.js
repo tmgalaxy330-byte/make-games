@@ -10,11 +10,13 @@
 
   // 動きの調整値（単位：ドット/秒）
   const PHYS = {
-    run: 96,          // 走る最高速度
+    run: 96,          // 歩く最高速度
+    dash: 150,        // ダッシュの最高速度
     accel: 700,       // 地上の加速
     decel: 900,       // 地上の減速
     air: 480,         // 空中の加速
-    jump: 300,        // ジャンプの初速 → 最大の高さ ≒ 300² / (2×900) = 50ドット（約3マス）
+    jump: 318,        // ジャンプの初速 → 最大の高さ ≒ 318² / (2×900) ≒ 56ドット（約3.5マス）
+    dashJump: 360,    // ダッシュ最高速でのジャンプ初速 → ≒ 72ドット（約4.5マス）
     gUp: 900,         // 上昇中（ボタンを押している間）の重力
     gDown: 1500,      // 下降中・ボタンを離したときの重力
     maxFall: 380,
@@ -56,6 +58,7 @@
     ground(68, 100);
     for (let y = 8; y <= 9; y++) set(74, y, '#');
     for (let y = 7; y <= 9; y++) set(80, y, '#');
+    for (let y = 8; y <= 9; y++) set(85, y, '#');           // 高い柱の前に段をつける
     for (let y = 6; y <= 9; y++) set(86, y, '#');
     stamps(76, 78, 6); stamps(82, 84, 5);
     set(92, 6, 'B'); set(93, 6, 'B'); set(94, 6, 'B');
@@ -180,32 +183,37 @@
   })();
 
   // ------------------------------------------------------------------ 入力（タッチ＋キーボード）
-  const input = { left: false, right: false, jump: false, act: false };
+  const input = { left: false, right: false, jump: false, dash: false };
   let jumpPrev = false;
-  const touchKeys = { left: false, right: false, jump: false, act: false };
-  const keyKeys = { left: false, right: false, jump: false, act: false };
+  const touchKeys = { left: false, right: false, jump: false, dash: false };
+  const keyKeys = { left: false, right: false, jump: false, dash: false };
 
   const buttons = [...document.querySelectorAll('#pad .btn')].map(el => ({ el, key: el.dataset.key }));
   const HIT_PAD = 18;   // ボタンの反応範囲を見た目より広くする（px）
 
-  function hitTest(x, y) {
-    let best = null, bestD = Infinity;
+  // 1本の指で押しているボタンを返す。
+  // DASH と JUMP のあいだを押したときだけ、両方を同時に押したことにする（親指1本でダッシュジャンプ）
+  function hitKeys(x, y) {
+    const hits = [];
     for (const b of buttons) {
       const r = b.el.getBoundingClientRect();
       if (x < r.left - HIT_PAD || x > r.right + HIT_PAD || y < r.top - HIT_PAD || y > r.bottom + HIT_PAD) continue;
-      const d = Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2);
-      if (d < bestD) { bestD = d; best = b.key; }
+      hits.push({ key: b.key, d: Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2) });
     }
-    return best;
+    if (!hits.length) return [];
+    const keys = hits.map(h => h.key);
+    if (keys.includes('jump') && keys.includes('dash')) return ['jump', 'dash'];
+    hits.sort((a, b) => a.d - b.d);
+    return [hits[0].key];
   }
+  const hitTest = (x, y) => hitKeys(x, y)[0] || null;
 
   function onTouch(e) {
     if (e.target.closest && e.target.closest('button')) return;   // メニューのボタンは通常どおり
     e.preventDefault();
     for (const k in touchKeys) touchKeys[k] = false;
     for (const t of e.touches) {
-      const k = hitTest(t.clientX, t.clientY);
-      if (k) touchKeys[k] = true;
+      for (const k of hitKeys(t.clientX, t.clientY)) touchKeys[k] = true;
     }
     syncInput();
   }
@@ -218,7 +226,7 @@
   document.addEventListener('mouseup', () => { if (mouseKey) { touchKeys[mouseKey] = false; mouseKey = null; syncInput(); } });
 
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
-    Space: 'jump', ArrowUp: 'jump', KeyZ: 'jump', KeyW: 'jump', KeyX: 'act', ShiftLeft: 'act' };
+    Space: 'jump', ArrowUp: 'jump', KeyZ: 'jump', KeyW: 'jump', KeyX: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash' };
   addEventListener('keydown', e => {
     if (e.code === 'Escape' || e.code === 'KeyP') { togglePause(); return; }
     const k = KEYMAP[e.code]; if (!k) return;
@@ -242,6 +250,7 @@
   let state = 'play';       // 'play' | 'pause' | 'clear'
   let fadeT = 0;            // ミス時のフェード
   const particles = [];
+  let dustT = 0;
   const bumps = [];         // たたかれたブロックのゆれ
 
   function reset() {
@@ -330,8 +339,11 @@
     // ---- 横の動き
     const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (dir) player.face = dir;
-    const accel = player.onGround ? (dir ? PHYS.accel : PHYS.decel) : PHYS.air;
-    player.vx = approach(player.vx, dir * PHYS.run, accel * dt);
+    const top = input.dash ? PHYS.dash : PHYS.run;
+    let accel = player.onGround ? (dir ? PHYS.accel : PHYS.decel) : PHYS.air;
+    // ダッシュをやめたときは、少しずつ歩く速さにもどす（急ブレーキにしない）
+    if (dir && Math.abs(player.vx) > top && Math.sign(player.vx) === dir) accel = 260;
+    player.vx = approach(player.vx, dir * top, accel * dt);
 
     // ---- ジャンプ（先行入力・コヨーテタイム）
     const jumpPressed = input.jump && !jumpPrev;
@@ -339,7 +351,9 @@
     player.buffer = jumpPressed ? PHYS.buffer : Math.max(0, player.buffer - dt);
     player.coyote = player.onGround ? PHYS.coyote : Math.max(0, player.coyote - dt);
     if (player.buffer > 0 && player.coyote > 0) {
-      player.vy = -PHYS.jump; player.buffer = 0; player.coyote = 0;
+      // 速く走っているほど高く跳べる（歩きの速さ以下は通常ジャンプ）
+      const k = Math.max(0, Math.min(1, (Math.abs(player.vx) - PHYS.run) / (PHYS.dash - PHYS.run)));
+      player.vy = -lerp(PHYS.jump, PHYS.dashJump, k); player.buffer = 0; player.coyote = 0;
       player.onGround = false; player.jumping = true;
     }
     if (player.vy >= 0) player.jumping = false;
@@ -368,6 +382,16 @@
       state = 'clear';
       document.getElementById('clear-stamps').textContent = stampCount;
       clearMenu.hidden = false;
+    }
+
+    // ---- ダッシュ中の土けむり
+    if (player.onGround && Math.abs(player.vx) > PHYS.run + 10) {
+      dustT -= dt;
+      if (dustT <= 0) {
+        dustT = 0.06;
+        particles.push({ kind: 'dust', x: player.x + player.w / 2 - player.face * 6, y: player.y + player.h - 2,
+          vx: -player.face * 20, vy: -15, t: 0 });
+      }
     }
 
     // ---- アニメ・カメラ・相棒
@@ -464,7 +488,7 @@
     // 主人公
     let key = 'STAND';
     if (!player.onGround) key = 'JUMP';
-    else if (Math.abs(player.vx) > 8) key = (Math.floor(player.animT / 10) % 2) ? 'RUN' : 'STAND';
+    else if (Math.abs(player.vx) > 8) key = (Math.floor(player.animT / (Math.abs(player.vx) > PHYS.run + 10 ? 14 : 10)) % 2) ? 'RUN' : 'STAND';
     const img = SPR[key + (player.face < 0 ? '_L' : '')];
     const sx = Math.round(player.x + player.w / 2 - img.width / 2 - cx);
     const sy = Math.round(player.y + player.h - img.height + 1 - camY);
@@ -477,6 +501,11 @@
     // エフェクト
     for (const p of particles) {
       if (p.kind === 'stamp') ctx.drawImage(SPR.STAMP, Math.round(p.x - cx), Math.round(p.y - camY));
+      else if (p.kind === 'dust') {
+        ctx.fillStyle = `rgba(236,220,196,${1 - p.t / 0.3})`;
+        const r = 1 + Math.round(p.t * 10);
+        ctx.fillRect(Math.round(p.x - cx) - r, Math.round(p.y - camY) - r, r * 2, r * 2);
+      }
       else { ctx.fillStyle = '#fff4aa'; ctx.fillRect(Math.round(p.x - cx), Math.round(p.y - camY), 2, 2); }
     }
 
@@ -528,5 +557,5 @@
   requestAnimationFrame(frame);
 
   // テスト用（ブラウザの開発ツールから状態を見られる）
-  window.__game = { player, get stamps() { return stampCount; }, get state() { return state; } };
+  window.__game = { player, level, keys: keyKeys, sync: syncInput, get stamps() { return stampCount; }, get state() { return state; } };
 })();
