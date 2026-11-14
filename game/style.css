@@ -316,3 +316,6 @@ body.cutscene #pad, body.cutscene #hud, body.menu #pad, body.menu #hud { opacity
 .sound-title { position: absolute; right: max(20px, env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   min-width: 0 !important; padding: 8px 14px !important; font-size: 13px !important; }
 .sound-title.off { opacity: .75; }
+.map-top { display: flex; align-items: center; gap: 18px; }
+.scene button.wbtn { min-width: 0; padding: 10px 14px; font-size: 16px; }
+.scene button.wbtn:disabled { opacity: .35; }

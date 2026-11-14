@@ -69,6 +69,8 @@
   let START = { x: 3 * TILE, y: 10 * TILE };
   let CHECKPOINT = null;
   let theme = null;
+  let levelDef = {};
+  let curWorld = 1;
 
   // ステージを組み立てる道具
   function makeBuilder() {
@@ -82,23 +84,52 @@
       pillar: (x, h) => { for (let y = 10 - h; y <= 9; y++) set(x, y, '#'); },
       gem: (x, y, n) => { set(x, y, 'K'); gemSpots[x + ',' + y] = n; },
       // row = 敵の足もとの行（ふつうは地面の10）。パタクモは空中を上下に飛ぶ
-      enemy: (kind, x, row = 10) => enemies.push({
-        kind, x: x * TILE + 2, y: row * TILE - 14, baseY: row * TILE - 14, w: 12, h: kind === 'pata' ? 10 : 14,
-        vx: kind === 'pata' ? -18 : -22, vy: 0, active: false, dead: null, deadT: 0, onGround: false, t: x,
-      }),
+      enemy: (kind, x, row = 10) => {
+        const h = { pata: 10, mogu: 12, yuki: 11, tsurara: 9 }[kind] || 14;
+        const vx = { pata: -18, yuki: -40, mogu: 0, tsurara: 0 }[kind] ?? -22;
+        // つららは row の行の上はしにぶら下がる。ほかは row が足もと
+        const y = kind === 'tsurara' ? row * TILE : row * TILE - h;
+        enemies.push({ kind, x: x * TILE + (kind === 'tsurara' ? 4 : 2), y, baseY: y, w: kind === 'tsurara' ? 8 : 12, h,
+          vx, vy: 0, active: false, dead: null, deadT: 0, onGround: false, t: x * 0.37, shakeT: 0, falling: false });
+      },
       // 左右に動く板：x0（左はし）, row, 幅（マス）, 動く幅（マス）, 速さ
       mover: (x0, row, wTiles, range, speed) => movers.push({
         x: x0 * TILE, y: row * TILE, w: wTiles * TILE, h: 6, x0: x0 * TILE, range: range * TILE, speed, t: 0, dx: 0,
       }),
       wallEnd: () => { for (let y = 0; y < 10; y++) set(LEVEL_W - 1, y, '#'); },
+      // 氷：row の行に氷ブロックをならべる。iceGround は地面の表面を氷にする
+      ice: (x0, x1, row) => { for (let x = x0; x <= x1; x++) set(x, row, 'I'); },
+      iceGround: (x0, x1) => { for (let x = x0; x <= x1; x++) set(x, 10, 'I'); },
+      // 流砂：地面の表面を流砂にする（しずんで、遅くなる）
+      quicksand: (x0, x1) => { for (let x = x0; x <= x1; x++) set(x, 10, 'Q'); },
+      // 敵の大きさは種類ごと（つららは天井からぶら下がる）
+      boss: (type) => {
+        const size = { geko: [26, 24], zara: [16, 12], snow: [20, 23] }[type];
+        boss = {
+          type, x: 20 * TILE, y: 10 * TILE - size[1], w: size[0], h: size[1], vx: 0, vy: 0, hp: 3, maxHp: 3,
+          mode: type === 'zara' ? 'crawl' : 'idle', t: 0, hurtT: 0, face: -1, onGround: true, dead: false, deadT: 0,
+          squash: 0, throws: 0, dir: -1, hist: [],
+        };
+        if (type === 'zara') for (let i = 0; i < 70; i++) boss.hist.push({ x: boss.x, y: boss.y });
+      },
     };
   }
 
   const THEMES = {
-    meadow: { sky: [[92, 150, 250], [196, 228, 255]], mtn: ['#96baec', '#70a6ce'], hill: ['#54ac60', '#8cd678'] },
-    forest: { sky: [[78, 136, 214], [168, 214, 236]], mtn: ['#7fb0c8', '#4f8f7e'], hill: ['#2f7f4a', '#5ab86a'], trees: true },
-    sunset: { sky: [[236, 128, 124], [255, 214, 150]], mtn: ['#c48aa8', '#9a6a94'], hill: ['#5a9a5a', '#8cc878'], lighthouse: true },
-    storm: { sky: [[64, 56, 104], [146, 128, 168]], mtn: ['#5a5280', '#463e6a'], hill: ['#3e5a4a', '#5a7a62'], noSun: true },
+    meadow: { sky: [[92, 150, 250], [196, 228, 255]], mtn: ['#96baec', '#70a6ce'], hill: ['#54ac60', '#8cd678'], song: 'meadow' },
+    forest: { sky: [[78, 136, 214], [168, 214, 236]], mtn: ['#7fb0c8', '#4f8f7e'], hill: ['#2f7f4a', '#5ab86a'], trees: true, song: 'forest' },
+    sunset: { sky: [[236, 128, 124], [255, 214, 150]], mtn: ['#c48aa8', '#9a6a94'], hill: ['#5a9a5a', '#8cc878'], lowSun: true, song: 'sunset' },
+    storm: { sky: [[64, 56, 104], [146, 128, 168]], mtn: ['#5a5280', '#463e6a'], hill: ['#3e5a4a', '#5a7a62'], noSun: true, song: 'boss' },
+    // ワールド2：カラカラ砂丘島
+    desert: { sky: [[96, 170, 240], [250, 226, 170]], mtn: ['#ecd09a', '#d8ae76'], hill: ['#dcb474', '#f0d494'], tiles: 'sand', pyramids: true, song: 'desert' },
+    ruins: { sky: [[184, 124, 92], [242, 194, 134]], mtn: ['#c89a70', '#a87a58'], hill: ['#b88c5c', '#d8b07c'], tiles: 'sand', pyramids: true, song: 'desert' },
+    dusk: { sky: [[118, 90, 160], [252, 172, 122]], mtn: ['#a07898', '#80608a'], hill: ['#c09060', '#e0b07c'], tiles: 'sand', pyramids: true, lowSun: true, song: 'desert' },
+    sandstorm: { sky: [[150, 110, 80], [222, 182, 132]], mtn: ['#a88660', '#8a6a4a'], hill: ['#b08c5c', '#c8a070'], tiles: 'sand', noSun: true, song: 'boss' },
+    // ワールド3：ツララ雪原島
+    snow: { sky: [[150, 190, 232], [232, 242, 255]], mtn: ['#c8d8f0', '#a8bce0'], hill: ['#e4eefa', '#ffffff'], tiles: 'snow', snowfall: true, song: 'snow' },
+    icecave: { sky: [[40, 60, 112], [92, 132, 182]], mtn: ['#4a6a9a', '#3a5684'], hill: ['#5a7aa8', '#7a9ac4'], tiles: 'snow', snowfall: true, noSun: true, song: 'snow' },
+    aurora: { sky: [[18, 28, 70], [60, 92, 142]], mtn: ['#3a4a7a', '#2e3c68'], hill: ['#c8d8f0', '#e8f0ff'], tiles: 'snow', snowfall: true, noSun: true, aurora: true, song: 'snow' },
+    blizzard: { sky: [[90, 100, 142], [172, 182, 212]], mtn: ['#7a84aa', '#646e94'], hill: ['#c0cce4', '#dce4f4'], tiles: 'snow', snowfall: true, noSun: true, song: 'boss' },
   };
 
   const LEVEL_DEFS = {
@@ -172,7 +203,7 @@
     } },
 
     // ---------------- 1-3 丘の上の灯台（動く足場）
-    '1-3': { w: 170, theme: 'sunset', checkpoint: 66, goal: 156, build(B) {
+    '1-3': { w: 170, theme: 'sunset', checkpoint: 66, goal: 156, lighthouse: true, build(B) {
       B.ground(0, 20);
       B.stamps(4, 7, 8);
       B.block(9, 6, 'bag');
@@ -206,22 +237,198 @@
       B.ground(0, 27);
       for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
       B.plank(5, 7, 6); B.plank(20, 22, 6);
-      boss = {
-        x: 20 * TILE, y: 10 * TILE - 24, w: 26, h: 24, vx: 0, vy: 0, hp: 3, maxHp: 3,
-        mode: 'idle', t: 0, hurtT: 0, face: -1, onGround: true, dead: false, deadT: 0, squash: 0,
-      };
+      B.boss('geko');
+    } },
+
+    // ================= ワールド2：カラカラ砂丘島 =================
+    // ---------------- 2-1 さばくの入り口（流砂・モグラ登場）
+    '2-1': { w: 150, theme: 'desert', checkpoint: 66, goal: 134, build(B) {
+      B.ground(0, 30);
+      B.stamps(6, 9, 8);
+      B.block(12, 6); B.block(13, 6, 'boots'); B.block(14, 6);
+      B.enemy('moyan', 18);
+      B.quicksand(22, 27); B.stamps(22, 27, 8); B.enemy('mogu', 25);
+      B.ground(34, 74);
+      B.pillar(38, 2); B.enemy('mogu', 42); B.enemy('toge', 46);
+      B.plank(48, 52, 7); B.stamps(48, 52, 5); B.gem(50, 3, 0);
+      B.pillar(55, 1); B.pillar(56, 2); B.pillar(57, 3);
+      B.enemy('mogu', 61);
+      B.quicksand(69, 73); B.enemy('moyan', 72);
+      B.ground(78, 110);
+      B.enemy('pata', 82, 6);
+      B.block(85, 6, 'lantern');
+      B.enemy('mogu', 88); B.enemy('moyan', 91); B.enemy('toge', 94);
+      B.pillar(98, 2); B.pillar(99, 4); B.gem(99, 2, 1);
+      B.block(103, 6, 'oneup', 'H');
+      B.ground(114, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(118 + i, i + 1);
+      B.gem(121, 3, 2);
+      B.quicksand(124, 128); B.enemy('mogu', 126);
+      B.enemy('moyan', 131);
+      B.wallEnd();
+    } },
+    // ---------------- 2-2 いせきの道（動く足場・流砂）
+    '2-2': { w: 160, theme: 'ruins', checkpoint: 70, goal: 146, build(B) {
+      B.ground(0, 22);
+      B.stamps(5, 8, 8);
+      B.enemy('moyan', 14);
+      B.block(16, 6, 'bag');
+      B.mover(23, 8, 3, 2, 1.2); B.stamps(24, 26, 6);
+      B.ground(28, 62);
+      B.pillar(31, 1); B.pillar(32, 3);
+      B.enemy('mogu', 36); B.enemy('mogu', 40);
+      B.plank(43, 46, 7); B.stamps(43, 46, 5);
+      B.plank(48, 51, 5); B.gem(49, 2, 0);
+      B.enemy('toge', 54);
+      B.pillar(56, 2);
+      B.enemy('pata', 60, 6);
+      B.plank(63, 66, 8);
+      B.ground(67, 104);
+      B.quicksand(74, 80); B.enemy('mogu', 77);
+      B.enemy('moyan', 83);
+      B.block(86, 6); B.block(87, 6, 'onigiri'); B.block(88, 6);
+      B.pillar(92, 2); B.pillar(93, 4); B.gem(93, 2, 1);
+      B.enemy('pata', 96, 6); B.enemy('toge', 100);
+      B.mover(105, 8, 3, 2, 1.4);
+      B.ground(110, LEVEL_W - 1);
+      B.enemy('mogu', 114); B.enemy('mogu', 118);
+      for (let i = 0; i < 4; i++) B.pillar(122 + i, i + 1);
+      for (let x = 126; x <= 129; x++) B.pillar(x, 4);
+      B.gem(128, 3, 2);
+      B.enemy('moyan', 134); B.enemy('toge', 138);
+      B.wallEnd();
+    } },
+    // ---------------- 2-3 夕ぐれのオアシス（灯台）
+    '2-3': { w: 170, theme: 'dusk', checkpoint: 66, goal: 156, lighthouse: true, build(B) {
+      B.ground(0, 24);
+      B.block(9, 6, 'plane');
+      B.enemy('mogu', 14); B.enemy('pata', 18, 6);
+      B.ground(28, 60);
+      B.quicksand(32, 38); B.enemy('mogu', 35);
+      B.pillar(42, 2); B.enemy('toge', 45);
+      B.plank(47, 51, 7); B.stamps(47, 51, 5); B.gem(49, 3, 0);
+      B.enemy('moyan', 53); B.enemy('moyan', 55); B.enemy('moyan', 57);
+      B.mover(61, 8, 3, 2, 1.3);
+      B.ground(66, 110);
+      B.block(70, 6, 'scarf');
+      B.enemy('mogu', 74); B.enemy('toge', 76); B.enemy('moyan', 78); B.enemy('pata', 81, 6);
+      B.pillar(85, 2); B.pillar(86, 4); B.gem(86, 2, 1);
+      B.quicksand(90, 96); B.enemy('mogu', 93);
+      B.enemy('moyan', 100);
+      B.block(104, 6, 'oneup', 'H');
+      B.ground(114, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(120 + i, i + 1);
+      for (let x = 124; x <= 127; x++) B.pillar(x, 4);
+      B.gem(126, 3, 2);
+      B.enemy('toge', 134); B.enemy('mogu', 138); B.enemy('pata', 142, 6);
+      B.wallEnd();
+    } },
+    // ---------------- ボス：砂ムカデ ザラザラ
+    '2-B': { w: 28, theme: 'sandstorm', checkpoint: null, goal: null, build(B) {
+      B.ground(0, 27);
+      for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
+      B.plank(5, 7, 6); B.plank(20, 22, 6);
+      B.boss('zara');
+    } },
+
+    // ================= ワールド3：ツララ雪原島 =================
+    // ---------------- 3-1 ゆきの原っぱ（すべる氷・ユキコロ登場）
+    '3-1': { w: 150, theme: 'snow', checkpoint: 64, goal: 134, build(B) {
+      B.ground(0, 30);
+      B.stamps(5, 8, 8);
+      B.block(12, 6); B.block(13, 6, 'boots'); B.block(14, 6);
+      B.enemy('yuki', 18);
+      B.iceGround(22, 30); B.enemy('moyan', 27);
+      B.ground(34, 70);
+      B.pillar(38, 2); B.enemy('yuki', 42);
+      B.plank(45, 49, 7); B.stamps(45, 49, 5); B.gem(47, 4, 0);
+      B.iceGround(52, 60); B.enemy('yuki', 56);
+      B.ground(74, 105);
+      B.block(78, 6, 'lantern');
+      B.enemy('yuki', 82); B.enemy('toge', 86);
+      B.pillar(90, 2); B.pillar(91, 4); B.gem(91, 2, 1);
+      B.iceGround(94, 102); B.enemy('yuki', 98);
+      B.block(100, 6, 'oneup', 'H');
+      B.ground(109, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(114 + i, i + 1);
+      B.gem(117, 3, 2);
+      B.iceGround(120, 128); B.enemy('yuki', 124); B.enemy('moyan', 128);
+      B.wallEnd();
+    } },
+    // ---------------- 3-2 こおりのどうくつ（落ちてくるつらら）
+    '3-2': { w: 160, theme: 'icecave', checkpoint: 70, goal: 146, build(B) {
+      B.ground(0, 26);
+      B.stamps(5, 8, 8);
+      B.block(10, 6, 'bag');
+      B.ice(14, 20, 3); B.enemy('tsurara', 15, 4); B.enemy('tsurara', 17, 4); B.enemy('tsurara', 19, 4);
+      B.enemy('yuki', 23);
+      B.ground(30, 66);
+      B.iceGround(34, 44); B.ice(36, 42, 3); B.enemy('tsurara', 37, 4); B.enemy('tsurara', 40, 4);
+      B.enemy('yuki', 41);
+      B.pillar(48, 2); B.pillar(49, 3); B.gem(49, 4, 0);
+      B.enemy('toge', 53);
+      B.plank(56, 60, 7); B.stamps(56, 60, 5);
+      B.enemy('pata', 62, 6);
+      B.ground(70, 108);
+      B.block(74, 6); B.block(75, 6, 'onigiri'); B.block(76, 6);
+      B.ice(80, 88, 3); B.enemy('tsurara', 81, 4); B.enemy('tsurara', 84, 4); B.enemy('tsurara', 87, 4);
+      B.enemy('yuki', 85);
+      B.iceGround(90, 98); B.gem(94, 7, 1); B.enemy('yuki', 96);
+      B.pillar(102, 2); B.pillar(103, 4);
+      B.mover(109, 8, 3, 2, 1.3);
+      B.ground(114, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(118 + i, i + 1);
+      for (let x = 122; x <= 125; x++) B.pillar(x, 4);
+      B.gem(124, 3, 2);
+      B.ice(130, 136, 3); B.enemy('tsurara', 131, 4); B.enemy('tsurara', 134, 4);
+      B.enemy('yuki', 138); B.enemy('moyan', 140);
+      B.wallEnd();
+    } },
+    // ---------------- 3-3 オーロラの丘（灯台）
+    '3-3': { w: 170, theme: 'aurora', checkpoint: 68, goal: 156, lighthouse: true, build(B) {
+      B.ground(0, 24);
+      B.block(9, 6, 'plane');
+      B.enemy('yuki', 14); B.enemy('pata', 18, 6);
+      B.ground(28, 62);
+      B.iceGround(30, 40); B.ice(32, 38, 3); B.enemy('tsurara', 33, 4); B.enemy('tsurara', 36, 4);
+      B.enemy('yuki', 36);
+      B.pillar(44, 2); B.enemy('toge', 47);
+      B.plank(50, 54, 7); B.stamps(50, 54, 5); B.gem(52, 3, 0);
+      B.enemy('yuki', 57); B.enemy('yuki', 59);
+      B.mover(63, 8, 3, 2, 1.4);
+      B.ground(67, 110);
+      B.block(72, 6, 'scarf');
+      B.enemy('yuki', 76); B.enemy('yuki', 78); B.enemy('toge', 80); B.enemy('pata', 83, 6);
+      B.iceGround(86, 96); B.ice(88, 94, 3); B.enemy('tsurara', 89, 4); B.enemy('tsurara', 92, 4);
+      B.pillar(99, 2); B.pillar(100, 4); B.gem(100, 2, 1);
+      B.block(105, 6, 'oneup', 'H');
+      B.ground(114, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(120 + i, i + 1);
+      for (let x = 124; x <= 127; x++) B.pillar(x, 4);
+      B.gem(126, 3, 2);
+      B.enemy('yuki', 134); B.enemy('toge', 138); B.enemy('pata', 142, 6);
+      B.wallEnd();
+    } },
+    // ---------------- ボス：雪だるま将軍
+    '3-B': { w: 28, theme: 'blizzard', checkpoint: null, goal: null, build(B) {
+      B.ground(0, 27);
+      for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
+      B.plank(5, 7, 6); B.plank(20, 22, 6);
+      B.boss('snow');
     } },
   };
 
   function buildLevel(idOverride) {
     const id = idOverride || STAGES[stageIndex].id;
     const def = LEVEL_DEFS[id];
+    levelDef = def;
+    curWorld = Number(id[0]);
     LEVEL_W = def.w;
     level.length = 0;
     for (const k in contents) delete contents[k];
     for (const k in parcelHits) delete parcelHits[k];
     for (const k in gemSpots) delete gemSpots[k];
-    enemies = []; movers = []; boss = null; shockwaves = []; bigGem = null;
+    enemies = []; movers = []; boss = null; shockwaves = []; bigGem = null; bossShots = [];
     for (let r = 0; r < ROWS; r++) level.push(new Array(LEVEL_W).fill('.'));
     START = { x: 3 * TILE, y: 10 * TILE };
     CHECKPOINT = def.checkpoint ? { x: def.checkpoint * TILE, y: 10 * TILE } : null;
@@ -233,22 +440,27 @@
   }
 
   // ワールド1のステージ一覧（playable=false は準備中）
-  const STAGES = [
-    { id: '1-1', label: '1-1', playable: true },
-    { id: '1-2', label: '1-2', playable: true },
-    { id: '1-3', label: '1-3', playable: true },
-    { id: '1-B', label: 'BOSS', playable: true, boss: true },
-  ];
+  const WORLDS = {
+    1: { name: 'はじまりの草原島', boss: '大ガエル ゲコドン', icon: 'GEKO' },
+    2: { name: 'カラカラ砂丘島', boss: '砂ムカデ ザラザラ', icon: 'ZARA_HEAD' },
+    3: { name: 'ツララ雪原島', boss: '雪だるま将軍', icon: 'SNOWMAN' },
+  };
+  const STAGES = [];
+  for (const w of [1, 2, 3]) {
+    for (const k of ['1', '2', '3']) STAGES.push({ id: `${w}-${k}`, w, label: `${w}-${k}`, playable: true });
+    STAGES.push({ id: `${w}-B`, w, label: 'BOSS', playable: true, boss: true });
+  }
   let stageIndex = 0;
 
   // ------------------------------------------------------------------ セーブ（この端末のブラウザに保存）
   const SAVE_KEY = 'mister-postman-save-v1';
-  const emptySave = () => ({ cleared: {}, best: {}, gems: {}, last: 0, prologue: false, chapter1: false });
+  const emptySave = () => ({ cleared: {}, best: {}, gems: {}, last: 0, prologue: false, chapters: {} });
   let save = emptySave();
   function loadSave() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (raw) save = Object.assign(emptySave(), JSON.parse(raw));
+      if (save.chapter1) { save.chapters[1] = true; delete save.chapter1; }   // 古いセーブのつづき
     } catch (e) { save = emptySave(); }
   }
   function writeSave() {
@@ -262,7 +474,7 @@
     canvas.style.filter = `saturate(${v})`;
   }
 
-  const isSolid = c => c === '#' || c === 'B' || c === 'P' || c === 'U';
+  const isSolid = c => c === '#' || c === 'B' || c === 'P' || c === 'U' || c === 'I' || c === 'Q';
   const tileAt = (tx, ty) => (tx < 0 || tx >= LEVEL_W) ? '#' : (ty < 0 || ty >= ROWS) ? '.' : level[ty][tx];
   const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
@@ -326,14 +538,19 @@
   const CLOUDS = [[20, 34, makeCloud(44)], [150, 22, makeCloud(56)], [300, 50, makeCloud(36)], [430, 30, makeCloud(48)]];
 
   // ------------------------------------------------------------------ タイル画像
-  function makeGroundTile(top, seed) {
+  const TILESETS = {
+    grass: { dirt: [[196, 124, 64], [140, 80, 42]], top: ['#46aa3c', '#6ed246', '#aaf06e', '#287832'] },
+    sand: { dirt: [[226, 190, 120], [188, 144, 86]], top: ['#e2c070', '#f0d890', '#fff0b4', '#b8904c'] },
+    snow: { dirt: [[150, 162, 196], [106, 116, 152]], top: ['#dce8f8', '#f4f8ff', '#ffffff', '#a8b8d8'] },
+  };
+  function makeGroundTile(top, seed, ts = TILESETS.grass) {
     const c = document.createElement('canvas'); c.width = 16; c.height = 16;
     const g = c.getContext('2d');
     let s = seed;
     const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
       const t = y / 15;
-      let col = [lerp(196, 140, t), lerp(124, 80, t), lerp(64, 42, t)];
+      let col = [0, 1, 2].map(i => lerp(ts.dirt[0][i], ts.dirt[1][i], t));
       if (rnd() < 0.08) col = col.map(v => v * 0.75);
       g.fillStyle = `rgb(${col.map(Math.round).join(',')})`; g.fillRect(x, y, 1, 1);
     }
@@ -346,16 +563,42 @@
     if (top) {
       for (let x = 0; x < 16; x++) {
         const h = 4 + ((x * 7) % 5 === 0 ? 1 : 0);
-        g.fillStyle = '#46aa3c'; g.fillRect(x, 0, 1, h);
-        g.fillStyle = '#6ed246'; g.fillRect(x, 0, 1, 2);
-        g.fillStyle = '#aaf06e'; g.fillRect(x, 0, 1, 1);
-        g.fillStyle = '#287832'; g.fillRect(x, h, 1, x % 4 === 1 ? 2 : 1);
+        g.fillStyle = ts.top[0]; g.fillRect(x, 0, 1, h);
+        g.fillStyle = ts.top[1]; g.fillRect(x, 0, 1, 2);
+        g.fillStyle = ts.top[2]; g.fillRect(x, 0, 1, 1);
+        g.fillStyle = ts.top[3]; g.fillRect(x, h, 1, x % 4 === 1 ? 2 : 1);
       }
     }
     return c;
   }
-  const GTOP = [makeGroundTile(true, 11), makeGroundTile(true, 23), makeGroundTile(true, 37)];
-  const GMID = [makeGroundTile(false, 5), makeGroundTile(false, 17), makeGroundTile(false, 29)];
+  const TILES = {};
+  for (const [k, ts] of Object.entries(TILESETS)) {
+    TILES[k] = {
+      top: [11, 23, 37].map(sd => makeGroundTile(true, sd, ts)),
+      mid: [5, 17, 29].map(sd => makeGroundTile(false, sd, ts)),
+    };
+  }
+  // 氷のブロック（すべる）
+  const ICE = (() => {
+    const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+    const g = c.getContext('2d');
+    g.fillStyle = '#9cd8f4'; g.fillRect(0, 0, 16, 16);
+    g.fillStyle = '#d8f4ff'; g.fillRect(0, 0, 16, 2); g.fillRect(0, 0, 2, 16);
+    g.fillStyle = '#5aa8d8'; g.fillRect(0, 14, 16, 2); g.fillRect(14, 0, 2, 16);
+    g.fillStyle = '#ffffff'; g.fillRect(3, 3, 4, 1); g.fillRect(3, 4, 1, 3); g.fillRect(9, 9, 3, 1);
+    return c;
+  })();
+  // 流砂（足がしずむ）
+  function drawQuicksand(dx, dy, tx) {
+    ctx.fillStyle = '#c8a060'; ctx.fillRect(dx, dy, 16, 16);
+    ctx.fillStyle = '#e0bc78'; ctx.fillRect(dx, dy, 16, 3);
+    ctx.fillStyle = '#a8804a';
+    for (let i = 0; i < 3; i++) {
+      const ox = Math.round((time * 10 + i * 6 + tx * 5) % 16);
+      ctx.fillRect(dx + ox, dy + 5 + i * 4, 4, 1);
+      if (ox > 12) ctx.fillRect(dx + ox - 16, dy + 5 + i * 4, 4, 1);
+    }
+  }
   const PLANK = (() => {
     const c = document.createElement('canvas'); c.width = 16; c.height = 6;
     const g = c.getContext('2d');
@@ -492,7 +735,7 @@
     run.stamps = 0; run.checkpoint = false; run.gems = [false, false, false];
     run.hearts = RULE.hearts; run.invT = 0; run.hurtT = 0;
     setDash(false);
-    document.getElementById('world-label').textContent = STAGES[i].label;
+    document.getElementById('world-label').textContent = STAGES[i].boss ? `${STAGES[i].w}-BOSS` : STAGES[i].label;
     save.last = i; writeSave();
     startLevel();
   }
@@ -515,8 +758,8 @@
   function damage() {
     if (run.invT > 0 || run.hurtT > 0 || state !== 'play') return;
     // なくなる順番：カバン → パワーアップ → ハート
-    if (run.bag) { run.bag = false; popText('カバンがやぶれた！'); sfx.bagRip(); }
-    else if (run.power) { popText(NAMES[run.power] + 'をなくした'); run.power = null; }
+    if (run.bag) { run.bag = false; popIcon('BIGBAG', { lost: true }); sfx.bagRip(); }
+    else if (run.power) { popIcon(ITEM_SPR[run.power], { lost: true }); run.power = null; }
     else { run.hearts--; }
     if (!run.bag) sfx.hurt();
     run.hurtT = RULE.iframes;
@@ -552,7 +795,7 @@
     sfx.stamp();
     for (let i = 0; i < n; i++) {
       run.stamps++;
-      if (run.stamps % RULE.stampsFor1up === 0) { run.lives++; popText('1UP！', '#7dff8a'); sfx.oneup(); }
+      if (run.stamps % RULE.stampsFor1up === 0) { run.lives++; popText('1UP', '#7dff8a'); popJoy(3); sfx.oneup(); }
     }
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2;
@@ -561,25 +804,39 @@
     updateHud();
   }
 
+  // 文字は短く・すぐ消える（0.6秒）
   function popText(text, color = '#fff') {
-    particles.push({ kind: 'text', text, color, x: player.x + player.w / 2, y: player.y - 6, t: 0, life: 1.2 });
+    particles.push({ kind: 'text', text, color, x: player.x + player.w / 2, y: player.y - 6, t: 0, life: 0.6 });
+  }
+  // よろこびの音符（♪）がふわっと出る
+  const NOTE_IMGS = ['NOTE_Y', 'NOTE_P', 'NOTE_C'];
+  function popJoy(n = 3, x = player.x + player.w / 2, y = player.y) {
+    for (let i = 0; i < n; i++) {
+      particles.push({ kind: 'icon', img: NOTE_IMGS[i % 3], x: x + (i - (n - 1) / 2) * 7, y: y - 4 - (i % 2) * 4,
+        vy: -38 - (i % 3) * 8, sway: (i % 2 ? 1 : -1) * (6 + i), t: 0, life: 0.75 + (i % 3) * 0.1 });
+    }
+  }
+  // 取ったもの（または、なくしたもの）のアイコンが頭の上に出る
+  function popIcon(img, opt = {}) {
+    particles.push({ kind: 'icon', img, x: player.x + player.w / 2, y: player.y - 8,
+      vy: opt.lost ? 30 : -30, sway: 0, t: 0, life: opt.lost ? 0.6 : 0.6, lost: !!opt.lost });
   }
 
   function collect(kind) {
     const x = player.x, y = player.y;
     if (POWERS.includes(kind)) {
-      if (run.power === kind) { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
-      else { run.power = kind; popText(NAMES[kind] + '！', '#ffec96'); sfx.power(); }
+      if (run.power === kind) { addStamps(RULE.dupStamps, x, y); popText('+' + RULE.dupStamps, '#ffec96'); }
+      else { run.power = kind; popIcon(ITEM_SPR[kind]); popJoy(3); sfx.power(); }
     } else if (kind === 'bag') {
-      if (run.bag) { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
-      else { run.bag = true; popText('大きな配達カバン！', '#ffec96'); sfx.power(); }
+      if (run.bag) { addStamps(RULE.dupStamps, x, y); popText('+' + RULE.dupStamps, '#ffec96'); }
+      else { run.bag = true; popIcon('BIGBAG'); popJoy(3); sfx.power(); }
     } else if (kind === 'onigiri') {
-      if (run.hearts < RULE.hearts) { run.hearts++; popText('ハート回復！', '#ff9aa0'); sfx.heal(); }
-      else { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
+      if (run.hearts < RULE.hearts) { run.hearts++; popIcon('HEART_S'); popJoy(2); sfx.heal(); }
+      else { addStamps(RULE.dupStamps, x, y); popText('+' + RULE.dupStamps, '#ffec96'); }
     } else if (kind === 'scarf') {
-      run.invT = RULE.invincible; popText('むてき！', '#fff4aa'); sfx.power();
+      run.invT = RULE.invincible; popJoy(5); sfx.power();
     } else if (kind === 'oneup') {
-      run.lives++; popText('1UP！', '#7dff8a'); sfx.oneup();
+      run.lives++; popText('1UP', '#7dff8a'); popJoy(3); sfx.oneup();
     }
     updateHud();
   }
@@ -649,6 +906,7 @@
     return hitWall;
   }
 
+  const STOMPABLE = { moyan: true, pata: true, mogu: true, yuki: true };
   function updateEnemies(dt) {
     for (const e of enemies) {
       if (!e.active) {
@@ -659,16 +917,38 @@
         if (e.dead === 'fall') { e.vy += PHYS.gDown * dt; e.x += e.vx * dt; e.y += e.vy * dt; }
         continue;
       }
+      e.t += dt;
       if (e.kind === 'pata') {
         // パタクモ：ゆっくり左右に進みながら、ふわふわ上下する
-        e.t += dt;
         e.x += e.vx * dt;
         e.y = e.baseY + Math.sin(e.t * 2.2) * 18;
         const ahead = e.vx > 0 ? Math.floor((e.x + e.w) / TILE) : Math.floor(e.x / TILE);
         if (isSolid(tileAt(ahead, Math.floor((e.y + 5) / TILE)))) e.vx = -e.vx;
+      } else if (e.kind === 'mogu') {
+        // スナモグラ：地面から出たり（約1.2秒）、もぐったり（約1.6秒）
+        const ph = e.t % 3.0;
+        e.up = ph < 1.4 ? 0 : ph < 1.6 ? (ph - 1.4) / 0.2 : ph < 2.8 ? 1 : (3.0 - ph) / 0.2;
+        e.vx = player.x < e.x ? -1 : 1;     // 向きだけ（動かない）
+      } else if (e.kind === 'tsurara') {
+        // つらら：真下に近づくと、ぷるぷるしてから落ちる
+        if (!e.falling) {
+          const near = Math.abs(player.x + player.w / 2 - (e.x + e.w / 2)) < 30 && player.y > e.y;
+          if (near || e.shakeT > 0) e.shakeT += dt;
+          if (e.shakeT > 0.4) { e.falling = true; e.vy = 0; }
+        } else {
+          e.vy = Math.min(e.vy + PHYS.gDown * dt, PHYS.maxFall);
+          e.y += e.vy * dt;
+          const ty = Math.floor((e.y + e.h) / TILE);
+          if (isSolid(tileAt(Math.floor((e.x + e.w / 2) / TILE), ty)) || e.y > ROWS * TILE) {
+            e.dead = 'gone';
+            for (let i = 0; i < 5; i++) particles.push({ kind: 'spark', x: e.x + 4, y: ty * TILE - 2, vx: (i - 2) * 30, vy: -40 - i * 8, t: 0, life: 0.3 });
+            sfx.bump();
+            continue;
+          }
+        }
       } else if (moveBody(e, dt)) e.vx = -e.vx;
       // 足場のはしで引き返す（小学生でも読みやすい動き）
-      if (e.kind !== 'pata' && e.onGround) {
+      if ((e.kind === 'moyan' || e.kind === 'toge' || e.kind === 'yuki') && e.onGround) {
         const fx = e.vx > 0 ? Math.floor((e.x + e.w + 1) / TILE) : Math.floor((e.x - 1) / TILE);
         const fy = Math.floor((e.y + e.h + 1) / TILE);
         const c = tileAt(fx, fy);
@@ -677,11 +957,14 @@
       if (e.y > ROWS * TILE + 40) { e.dead = 'gone'; continue; }
 
       // 主人公とのふれあい
+      if (e.kind === 'mogu' && e.up < 0.6) continue;        // もぐっている間はさわれない
+      if (e.kind === 'tsurara' && !e.falling) continue;
       if (state !== 'play' || !overlap(player, e)) continue;
       if (run.invT > 0) { killEnemy(e, 'fall'); continue; }
       const fromAbove = player.vy > 0 && player.prevBottom <= e.y + 6;
-      if ((e.kind === 'moyan' || e.kind === 'pata') && fromAbove) {
+      if (STOMPABLE[e.kind] && fromAbove) {
         killEnemy(e, 'squash'); sfx.stomp();
+        if (Math.random() < 0.5) popJoy(1, e.x + 6, e.y);
         player.y = e.y - player.h;
         player.vy = -(input.jump ? PHYS.stompHigh : PHYS.stomp);
         player.jumping = input.jump;
@@ -741,13 +1024,19 @@
     // ---- 横の動き
     const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (dir) player.face = dir;
+    // 足もとの地面：氷はすべる、流砂はしずんで遅くなる
+    const under = player.onGround ? tileAt(Math.floor((player.x + player.w / 2) / TILE), Math.floor((player.y + player.h + 1) / TILE)) : '.';
+    player.onIce = under === 'I';
+    player.inSand = under === 'Q';
     let top = input.dash ? PHYS.dash : PHYS.run;
+    if (player.inSand) top *= 0.55;
     if (run.invT > 0) top *= 1.1;                       // むてき中は少し速い
     let accel = player.onGround ? (dir ? PHYS.accel : PHYS.decel) : PHYS.air;
     // ダッシュをやめたときは、少しずつ歩く速さにもどす（急ブレーキにしない）
     if (dir && Math.abs(player.vx) > top && Math.sign(player.vx) === dir) accel = 260;
     // 空中ブレーキ：空中で進む向きと反対を押すと強く減速できる（着地を合わせやすく）
     if (!player.onGround && dir && player.vx && Math.sign(player.vx) === -dir) accel = PHYS.airBrake;
+    if (player.onIce) accel = dir ? 170 : 60;
     player.vx = approach(player.vx, dir * top, accel * dt);
 
     // ---- ジャンプ（先行入力・コヨーテタイム）
@@ -759,7 +1048,7 @@
     if (player.buffer > 0 && player.coyote > 0) {
       // 速く走っているほど高く跳べる（歩きの速さ以下は通常ジャンプ）
       const k = Math.max(0, Math.min(1, (Math.abs(player.vx) - PHYS.run) / (PHYS.dash - PHYS.run)));
-      player.vy = -lerp(PHYS.jump, PHYS.dashJump, k); player.buffer = 0; player.coyote = 0;
+      player.vy = -lerp(PHYS.jump, PHYS.dashJump, k) * (player.inSand ? 0.82 : 1); player.buffer = 0; player.coyote = 0;
       sfx.jump();
       player.onGround = false; player.jumping = true;
     } else if (jumpPressed && !player.onGround && run.power === 'boots' && !player.usedDouble) {
@@ -818,7 +1107,7 @@
       else if (tc === 'K') {
         level[ty][tx] = '.';
         run.gems[gemSpots[tx + ',' + ty]] = true;
-        popText('ヒカリのかけら！', '#9ef0ff'); sfx.gem();
+        popIcon('GEM'); popJoy(3); sfx.gem();
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * Math.PI * 2;
           particles.push({ kind: 'spark', x: tx * TILE + 8, y: ty * TILE + 8, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, t: 0, life: 0.4 });
@@ -831,7 +1120,7 @@
     if (player.y > ROWS * TILE + 24) { run.hearts = 0; updateHud(); miss(); }
 
     // ---- 中間ポスト
-    if (CHECKPOINT && !run.checkpoint && player.x > CHECKPOINT.x) { run.checkpoint = true; popText('中間ポスト！', '#ffec96'); sfx.check(); }
+    if (CHECKPOINT && !run.checkpoint && player.x > CHECKPOINT.x) { run.checkpoint = true; popJoy(3); sfx.check(); }
 
     // ---- ゴール
     if (goal && player.x + player.w > goal.x + 2 && player.x < goal.x + goal.w - 2 && player.y + player.h > goal.y) {
@@ -864,7 +1153,7 @@
       const wall = moveBody(b, dt);
       if (b.onGround) b.vy = -170;
       for (const e of enemies) {
-        if (!e.dead && e.active && overlap(b, e)) { killEnemy(e, 'fall'); b.done = true; break; }
+        if (!e.dead && e.active && !(e.kind === 'mogu' && e.up < 0.6) && overlap(b, e)) { killEnemy(e, 'fall'); b.done = true; break; }
       }
       if (wall || b.t > 1.6 || b.y > ROWS * TILE) b.done = true;
       if (b.done) particles.push({ kind: 'spark', x: b.x, y: b.y, vx: 0, vy: -30, t: 0, life: 0.25 });
@@ -935,10 +1224,12 @@
     updateParticles(dt);
     if (goalT >= GOAL.irisEnd + 0.25 && state === 'goal' && STAGES[stageIndex].boss) {
       state = 'chapter';
-      const firstTime = !save.chapter1;
-      save.chapter1 = true; writeSave();
-      if (firstTime) playDialog(CHAPTER1_END, () => enterMap(3), true);
-      else enterMap(stageIndex);
+      const w = STAGES[stageIndex].w;
+      const firstTime = !save.chapters[w];
+      save.chapters[w] = true; writeSave();
+      const next = Math.min(stageIndex + 1, STAGES.length - 1);
+      if (firstTime) playDialog(CHAPTER_END[w], () => enterMap(next), `${w}-3`);
+      else enterMap(next);
       return;
     }
     if (goalT >= GOAL.irisEnd + 0.25 && state === 'goal') {
@@ -1017,7 +1308,8 @@
     for (const p of particles) {
       p.t += dt;
       if (p.kind === 'stamp') { p.y += p.vy * dt; p.vy += 500 * dt; }
-      else if (p.kind === 'text') { p.y -= 18 * dt; }
+      else if (p.kind === 'text') { p.y -= 40 * dt; }
+      else if (p.kind === 'icon') { p.y += p.vy * dt; p.vy *= p.lost ? 1 : 0.96; }
       else if (p.kind === 'letter') {
         const k = Math.min(1, p.t / p.life);
         p.x = lerp(p.sx, p.ex, k); p.y = lerp(p.sy, p.ey, k) - Math.sin(k * Math.PI) * 18;
@@ -1071,7 +1363,7 @@
     const blinkInv = run.invT > 0 && run.invT < RULE.invWarn && Math.floor(time * 10) % 2 === 0;
     if (blinkHurt) return;
     const sx = Math.round(player.x + player.w / 2 - base.width / 2 - camX) - 12;
-    const sy = Math.round(player.y + player.h - base.height + 1 - camY) - 12;
+    const sy = Math.round(player.y + player.h - base.height + 1 - camY) - 12 + (player.inSand && player.onGround ? 3 : 0);
     if (player.onGround && state === 'play') {
       ctx.fillStyle = 'rgba(30,40,20,.3)';
       ctx.beginPath(); ctx.ellipse(Math.round(player.x + player.w / 2 - camX), Math.round(player.y + player.h - camY), 7, 1.5, 0, 0, 7); ctx.fill();
@@ -1081,6 +1373,46 @@
     ctx.globalAlpha = 1;
     if (run.invT > 0 && Math.floor(time * 20) % 3 === 0) {
       particles.push({ kind: 'spark', x: player.x + Math.random() * 14 - 2, y: player.y + Math.random() * 18, vx: 0, vy: -20, t: 0, life: 0.3 });
+    }
+  }
+
+  // ピラミッド（ワールド2の遠く）
+  function drawPyramids(cx, groundY) {
+    const off = cx * 0.12, step = 220;
+    for (let i = Math.floor(off / step) - 1; i * step - off < viewW + step; i++) {
+      const x = Math.round(i * step - off + ((i * 71) % 60)), h = 46 + ((i * 29) % 24);
+      const base = groundY - 18;
+      for (let y = 0; y < h; y++) {
+        const w = Math.round((y / h) * h * 1.1);
+        ctx.fillStyle = y % 6 === 0 ? 'rgba(160,110,70,.55)' : 'rgba(200,150,96,.55)';
+        ctx.fillRect(x - w, base - h + y, w, 1);
+        ctx.fillStyle = y % 6 === 0 ? 'rgba(130,86,56,.55)' : 'rgba(170,120,78,.55)';
+        ctx.fillRect(x, base - h + y, w, 1);
+      }
+    }
+  }
+  // オーロラ（ワールド3の夜空）
+  function drawAurora() {
+    const cols = ['rgba(110,240,170,.22)', 'rgba(120,200,255,.18)', 'rgba(200,140,255,.14)'];
+    cols.forEach((c, k) => {
+      ctx.fillStyle = c;
+      for (let x = 0; x < viewW; x += 2) {
+        const y = 30 + k * 12 + Math.sin(x * 0.02 + time * 0.6 + k) * 10 + Math.sin(x * 0.007 + k * 2) * 14;
+        ctx.fillRect(x, Math.round(y), 2, 14 + Math.round(Math.sin(x * 0.05 + time + k) * 4));
+      }
+    });
+    // 星
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 30; i++) ctx.fillRect((i * 97) % viewW, (i * 53) % 90, 1, 1);
+  }
+  // 雪がふる（画面に重ねる）
+  function drawSnowfall() {
+    for (let i = 0; i < 45; i++) {
+      const sp = 14 + (i % 5) * 7;
+      const x = Math.round(((i * 53 + time * (8 + (i % 3) * 5)) % (viewW + 20)) - 10 + Math.sin(time + i) * 4);
+      const y = Math.round((i * 41 + time * sp) % viewH);
+      ctx.fillStyle = i % 4 === 0 ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.7)';
+      ctx.fillRect(x, y, i % 4 === 0 ? 2 : 1, i % 4 === 0 ? 2 : 1);
     }
   }
 
@@ -1100,7 +1432,7 @@
   // 灯台（1-3のゴールの先）。ワールド1をクリアすると光る
   function drawLighthouse(x, groundY) {
     x = Math.round(x);
-    const lit = save.chapter1;
+    const lit = !!save.chapters[curWorld];
     for (let i = 0; i < 64; i++) {
       const w = Math.round(lerp(14, 22, i / 63));
       const stripe = Math.floor(i / 10) % 2 === 1;
@@ -1121,8 +1453,10 @@
   let shockwaves = [];
   let bigGem = null;
   let shake = 0;
+  let bossShots = [];     // 雪だるま将軍の雪玉
+
   function updateBoss(dt) {
-    if (!boss) { updateBigGem(dt); return; }
+    if (!boss) { updateBigGem(dt); updateShockwaves(dt); return; }
     const b = boss;
     if (b.hurtT > 0) b.hurtT -= dt;
     if (b.dead) {
@@ -1136,6 +1470,46 @@
     if (!b.active) { if (player.x > 6 * TILE) b.active = true; else return; }
     const speedUp = (b.maxHp - b.hp) * 0.25;
     b.t += dt;
+    if (b.type === 'geko') updateGeko(b, dt, speedUp);
+    else if (b.type === 'zara') updateZara(b, dt, speedUp);
+    else updateSnowman(b, dt, speedUp);
+
+    // 主人公とのふれあい（頭をふむとダメージ。ほかの場所をふんだら、はね返るだけ）
+    if (state === 'play') {
+      for (const box of bossBoxes(b)) {
+        if (!overlap(player, box)) continue;
+        const fromAbove = player.vy > 0 && player.prevBottom <= box.y + 8;
+        if (fromAbove) {
+          if (box.head && b.hurtT <= 0) hitBoss(1, true);
+          else { player.vy = -230; player.y = box.y - player.h; player.jumping = false; }
+        } else if (run.invT > 0) { if (b.hurtT <= 0) hitBoss(1, false); }
+        else damage();
+        break;
+      }
+    }
+    // 光の玉
+    for (const ball of balls) {
+      if (!ball.done && b.hurtT <= 0 && bossBoxes(b).some(box => overlap(ball, box))) { ball.done = true; hitBoss(1 / 3, false); }
+    }
+    updateShockwaves(dt);
+    updateBossShots(dt);
+  }
+
+  function bossBoxes(b) {
+    if (b.type === 'zara') {
+      return [{ x: b.x, y: b.y, w: b.w, h: b.h, head: true }, ...zaraSegs(b).map(p => ({ x: p.x + 1, y: p.y + 1, w: 12, h: 9 }))];
+    }
+    if (b.type === 'snow') return [{ x: b.x + 3, y: b.y, w: b.w - 6, h: 11, head: true }, { x: b.x - 1, y: b.y + 11, w: b.w + 2, h: b.h - 11 }];
+    return [{ x: b.x, y: b.y, w: b.w, h: b.h, head: true }];
+  }
+
+  function landShock(b, speed) {
+    b.vx = 0; shake = 0.3; sfx.thud();
+    for (const dir of [-1, 1]) shockwaves.push({ x: b.x + b.w / 2, dir, speed, t: 0, y: b.y + b.h });
+  }
+
+  // ゲコドン：ためて → 大ジャンプ → 着地でゆれ
+  function updateGeko(b, dt, speedUp) {
     if (b.mode === 'idle') {
       b.face = player.x < b.x ? -1 : 1;
       if (b.t > 1.1 - speedUp) { b.mode = 'crouch'; b.t = 0; }
@@ -1149,28 +1523,82 @@
     }
     const wasAir = b.mode === 'air';
     moveBody(b, dt);
-    if (wasAir && b.onGround && b.t > 0.1) {
-      b.mode = 'idle'; b.t = 0; b.vx = 0; shake = 0.3; sfx.thud();
-      for (const dir of [-1, 1]) {
-        shockwaves.push({ x: b.x + b.w / 2, dir, speed: 120 + speedUp * 60, t: 0, y: b.y + b.h });
+    if (wasAir && b.onGround && b.t > 0.1) { b.mode = 'idle'; b.t = 0; landShock(b, 120 + speedUp * 60); }
+    if (b.onGround && b.mode !== 'air') b.vx = 0;
+  }
+
+  // ザラザラ：地面をはって往復し、ときどき大きくはねる。体は頭のあとをついてくる
+  function zaraSegs(b) {
+    const segs = [];
+    for (let i = 1; i <= 5; i++) {
+      const p = b.hist[Math.max(0, b.hist.length - 1 - i * 10)];
+      segs.push({ x: p.x - 1, y: p.y + 2 });
+    }
+    return segs;
+  }
+  function updateZara(b, dt, speedUp) {
+    const speed = 62 + speedUp * 50;
+    if (b.mode === 'crawl') {
+      b.vx = b.dir * speed;
+      if (b.t > 2.4 - speedUp * 1.2 && b.onGround) { b.mode = 'leap'; b.t = 0; b.vy = -310; }
+    }
+    if (moveBody(b, dt)) b.dir = -b.dir;
+    b.face = b.dir;
+    if (b.mode === 'leap' && b.onGround && b.t > 0.15) {
+      b.mode = 'crawl'; b.t = 0;
+      landShock(b, 100 + speedUp * 50);
+      b.vx = b.dir * speed;
+    }
+    b.hist.push({ x: b.x, y: b.y });
+    if (b.hist.length > 70) b.hist.shift();
+  }
+
+  // 雪だるま将軍：雪玉を2回なげて → ジャンプ → 着地でゆれ
+  function updateSnowman(b, dt, speedUp) {
+    if (b.mode === 'idle') {
+      b.face = player.x < b.x ? -1 : 1;
+      if (b.t > 1.0 - speedUp * 0.8) {
+        b.t = 0;
+        if (b.throws < 2) {
+          b.throws++;
+          const dx = player.x - b.x;
+          bossShots.push({ x: b.x + b.w / 2 - 5, y: b.y + 4, w: 10, h: 10, vx: Math.max(-150, Math.min(150, dx * 0.9)), vy: -250, bounces: 0 });
+          sfx.fire();
+        } else { b.mode = 'crouch'; b.throws = 0; }
+      }
+    } else if (b.mode === 'crouch') {
+      b.squash = Math.min(1, b.t / 0.3);
+      if (b.t > 0.35) {
+        b.mode = 'air'; b.t = 0; b.squash = 0;
+        b.vy = -300; b.vx = Math.max(-110, Math.min(110, (player.x - b.x) * 1.0));
       }
     }
+    const wasAir = b.mode === 'air';
+    moveBody(b, dt);
+    if (wasAir && b.onGround && b.t > 0.1) { b.mode = 'idle'; b.t = 0; landShock(b, 110 + speedUp * 60); }
     if (b.onGround && b.mode !== 'air') b.vx = 0;
+  }
 
-    // 主人公とのふれあい
-    if (state === 'play' && overlap(player, b)) {
-      const fromAbove = player.vy > 0 && player.prevBottom <= b.y + 10;
-      if (fromAbove) {
-        if (b.hurtT <= 0) hitBoss(1, true);
-        else { player.vy = -200; player.y = b.y - player.h; }       // ダメージ直後は、はね返るだけ
-      } else if (run.invT > 0) { if (b.hurtT <= 0) hitBoss(1, false); }
-      else damage();
+  function updateBossShots(dt) {
+    for (const sh of bossShots) {
+      sh.vy = Math.min(sh.vy + 900 * dt, 360);
+      sh.x += sh.vx * dt; sh.y += sh.vy * dt;
+      if (sh.y + sh.h >= 10 * TILE) {
+        sh.y = 10 * TILE - sh.h; sh.bounces++;
+        sh.vy = -170;
+        if (sh.bounces > 2) sh.done = true;
+      }
+      if (sh.x < TILE || sh.x > (LEVEL_W - 1) * TILE - sh.w) sh.vx = -sh.vx;
+      for (const ball of balls) if (!ball.done && overlap(ball, sh)) { ball.done = true; sh.done = true; }
+      if (!sh.done && state === 'play' && overlap(player, sh)) {
+        if (run.invT > 0) sh.done = true; else damage();
+      }
+      if (sh.done) for (let i = 0; i < 6; i++) particles.push({ kind: 'spark', x: sh.x + 5, y: sh.y + 5, vx: (i - 2.5) * 30, vy: -60 + i * 10, t: 0, life: 0.3 });
     }
-    // 光の玉
-    for (const ball of balls) {
-      if (!ball.done && overlap(ball, b) && b.hurtT <= 0) { ball.done = true; hitBoss(1 / 3, false); }
-    }
-    // 地面のゆれ
+    bossShots = bossShots.filter(sh => !sh.done);
+  }
+
+  function updateShockwaves(dt) {
     for (const w of shockwaves) {
       w.t += dt; w.x += w.dir * w.speed * dt;
       if (state === 'play' && player.onGround && Math.abs(player.y + player.h - w.y) < 4 &&
@@ -1194,9 +1622,9 @@
       particles.push({ kind: 'spark', x: b.x + b.w / 2, y: b.y + 6, vx: Math.cos(a) * 80, vy: Math.sin(a) * 80, t: 0, life: 0.35 });
     }
     if (b.hp <= 0.001) {
-      b.dead = true; b.deadT = 0; b.vy = -200; shockwaves = [];
+      b.dead = true; b.deadT = 0; b.vy = -200; shockwaves = []; bossShots = [];
       SND.stop(); sfx.bossDown();
-      popText('やった！', '#ffec96');
+      popJoy(6);
     }
   }
 
@@ -1215,10 +1643,17 @@
     // ゆれ
     for (const w of shockwaves) {
       const x = Math.round(w.x - cx), y = Math.round(w.y - camY);
-      ctx.fillStyle = 'rgba(255,236,150,.9)';
+      ctx.fillStyle = theme.tiles === 'snow' ? 'rgba(230,244,255,.95)' : 'rgba(255,236,150,.9)';
       ctx.fillRect(x - 3, y - 6, 6, 6);
-      ctx.fillStyle = 'rgba(200,140,60,.9)';
+      ctx.fillStyle = theme.tiles === 'snow' ? 'rgba(140,170,220,.95)' : 'rgba(200,140,60,.9)';
       ctx.fillRect(x - 5, y - 3, 10, 3);
+    }
+    // 雪玉
+    for (const sh of bossShots) {
+      const x = Math.round(sh.x + 5 - cx), y = Math.round(sh.y + 5 - camY);
+      ctx.fillStyle = '#281c34'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill();
+      ctx.fillStyle = '#f4f8ff'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill();
+      ctx.fillStyle = '#c8d8f0'; ctx.fillRect(x, y + 1, 3, 2);
     }
     if (bigGem && !bigGem.taken) {
       const gx = Math.round(bigGem.x - cx), gy = Math.round(bigGem.y - camY + Math.sin(time * 3) * 2);
@@ -1228,13 +1663,29 @@
     const b = boss;
     if (!b) return;
     if (b.hurtT > 0 && Math.floor(time * 20) % 2 === 0 && !b.dead) return;
-    const img = SPR['GEKO' + (b.face > 0 ? '_L' : '')];
-    const sq = b.squash * 0.25, st = b.mode === 'air' ? 0.12 : 0;
-    const w = Math.round(img.width * (1 + sq - st)), h = Math.round(img.height * (1 - sq + st));
-    const x = Math.round(b.x + b.w / 2 - w / 2 - cx), y = Math.round(b.y + b.h - h - camY);
-    if (b.dead) {
-      ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(1, -1); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
-    } else ctx.drawImage(img, x, y, w, h);
+    const flip = b.face > 0 ? '_L' : '';
+    if (b.type === 'zara') {
+      // 体（しっぽから順にかく）
+      if (!b.dead) {
+        const segs = zaraSegs(b);
+        for (let i = segs.length - 1; i >= 0; i--) {
+          const p = segs[i], img = SPR.ZARA_SEG;
+          ctx.drawImage(img, Math.round(p.x - cx) - 1, Math.round(p.y - camY) - 1 + (Math.floor(time * 10 + i) % 2));
+        }
+      }
+      const img = SPR['ZARA_HEAD' + flip];
+      const x = Math.round(b.x + b.w / 2 - img.width / 2 - cx), y = Math.round(b.y + b.h - img.height - camY + 1);
+      if (b.dead) { ctx.save(); ctx.translate(x + img.width / 2, y + img.height / 2); ctx.scale(1, -1); ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore(); }
+      else ctx.drawImage(img, x, y);
+    } else {
+      const img = SPR[(b.type === 'geko' ? 'GEKO' : 'SNOWMAN') + flip];
+      const sq = b.squash * 0.25, st = b.mode === 'air' ? 0.12 : 0;
+      const w = Math.round(img.width * (1 + sq - st)), h = Math.round(img.height * (1 - sq + st));
+      const x = Math.round(b.x + b.w / 2 - w / 2 - cx), y = Math.round(b.y + b.h - h - camY + 1);
+      if (b.dead) {
+        ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(1, -1); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+      } else ctx.drawImage(img, x, y, w, h);
+    }
     // HP（画面上のまん中）
     if (!b.dead) {
       const n = b.maxHp, bw = 18;
@@ -1274,10 +1725,10 @@
 
     // 太陽
     if (!theme.noSun) {
-      const sy = theme.lighthouse ? viewH - 90 : 44;      // 夕日は低い位置
+      const sy = theme.lowSun ? viewH - 90 : 44;      // 夕日は低い位置
       ctx.fillStyle = 'rgba(255,246,200,.25)'; ctx.beginPath(); ctx.arc(viewW - 60, sy, 24, 0, 7); ctx.fill();
       ctx.fillStyle = 'rgba(255,246,200,.4)'; ctx.beginPath(); ctx.arc(viewW - 60, sy, 16, 0, 7); ctx.fill();
-      ctx.fillStyle = theme.lighthouse ? '#fff0b0' : '#fff6c8'; ctx.beginPath(); ctx.arc(viewW - 60, sy, 10, 0, 7); ctx.fill();
+      ctx.fillStyle = theme.lowSun ? '#fff0b0' : '#fff6c8'; ctx.beginPath(); ctx.arc(viewW - 60, sy, 10, 0, 7); ctx.fill();
     }
 
     // 雲（とても遠い）
@@ -1287,6 +1738,8 @@
     }
     // 山（奥ほどゆっくり動く）
     const groundY = 10 * TILE - camY;
+    if (theme.aurora) drawAurora();
+    if (theme.pyramids) drawPyramids(cx, groundY);
     LAYERS.forEach((L, li) => {
       ctx.fillStyle = theme.mtn[li];
       const off = Math.floor(cx * L.par);
@@ -1323,7 +1776,8 @@
       if (bm) dy -= Math.round(Math.sin((bm.t / 0.15) * Math.PI) * 4);
       if (c === '#') {
         const above = tileAt(tx, ty - 1);
-        ctx.drawImage(above === '#' ? GMID[tx % 3] : GTOP[tx % 3], dx, dy);
+        const T = TILES[theme.tiles || 'grass'];
+        ctx.drawImage(above === '#' || above === 'I' || above === 'Q' ? T.mid[tx % 3] : T.top[tx % 3], dx, dy);
       } else if (c === '=') ctx.drawImage(PLANK, dx, dy);
       else if (c === 'B') {
         ctx.drawImage(SPR.LETTERBLK, dx, dy);
@@ -1335,6 +1789,8 @@
         }
       }
       else if (c === 'P') ctx.drawImage(SPR.PARCEL, dx, dy);
+      else if (c === 'I') ctx.drawImage(ICE, dx, dy);
+      else if (c === 'Q') drawQuicksand(dx, dy, tx);
       else if (c === 'U') ctx.drawImage(USED, dx, dy);
       else if (c === '*') {
         const bob = Math.round(Math.sin(time * 4 + tx) * 1.5);
@@ -1351,15 +1807,15 @@
     }
     // ステージより下も土で埋める（画面の下まで）
     for (let tx = x0; tx <= x1; tx++) {
-      if (level[ROWS - 1][tx] !== '#') continue;
-      for (let y = ROWS * TILE - camY; y < viewH; y += TILE) ctx.drawImage(GMID[(tx + 1) % 3], tx * TILE - cx, y);
+      if (!isSolid(level[ROWS - 1][tx])) continue;
+      for (let y = ROWS * TILE - camY; y < viewH; y += TILE) ctx.drawImage(TILES[theme.tiles || 'grass'].mid[(tx + 1) % 3], tx * TILE - cx, y);
     }
 
     drawCheckpoint(camY);
     // ゴールのポスト
     const pb = postBounce > 0 ? Math.round(Math.sin((1 - postBounce / 0.35) * Math.PI) * 5) : 0;
     if (goal) ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3 - pb);
-    if (theme.lighthouse && goal) drawLighthouse(goal.x + 6 * TILE - cx, 10 * TILE - camY);
+    if (levelDef.lighthouse && goal) drawLighthouse(goal.x + 6 * TILE - cx, 10 * TILE - camY);
 
     // 動く足場
     for (const m of movers) {
@@ -1371,9 +1827,31 @@
     // 敵
     for (const e of enemies) {
       if (!e.active) continue;
-      const img = SPR[({ moyan: 'MOYAN', toge: 'TOGE', pata: 'PATA' })[e.kind] + (e.vx > 0 ? '_L' : '')];
+      const name = { moyan: 'MOYAN', toge: 'TOGE', pata: 'PATA', mogu: 'MOGU', yuki: 'YUKI', tsurara: 'TSURARA' }[e.kind];
+      const img = SPR[name + (e.vx > 0 ? '_L' : '')];
       const ex = Math.round(e.x + e.w / 2 - img.width / 2 - cx);
-      const ey = Math.round(e.y + e.h - img.height - camY);
+      let ey = Math.round(e.y + e.h - img.height - camY);
+      if (e.kind === 'tsurara') {
+        ey = Math.round(e.y - camY) - 1;
+        const shake = !e.falling && e.shakeT > 0 ? Math.round(Math.sin(time * 60)) : 0;
+        ctx.drawImage(img, ex + shake, ey);
+        continue;
+      }
+      if (e.kind === 'mogu' && !e.dead) {
+        // 地面から顔を出す：地面より下はかくす
+        const rise = Math.round((1 - (e.up || 0)) * (img.height - 1));
+        if (rise >= img.height - 1) {
+          // もぐっているときは、土がもこもこ動く
+          ctx.fillStyle = 'rgba(120,80,40,.6)';
+          ctx.fillRect(ex + 3, Math.round(e.y + e.h - camY) - 2 - (Math.floor(time * 8) % 2), img.width - 6, 2);
+          continue;
+        }
+        ctx.save();
+        ctx.beginPath(); ctx.rect(ex - 2, 0, img.width + 4, Math.round(e.y + e.h - camY)); ctx.clip();
+        ctx.drawImage(img, ex, ey + rise);
+        ctx.restore();
+        continue;
+      }
       if (e.dead === 'squash') {
         ctx.drawImage(img, ex, ey + img.height - 6, img.width, 6);
       } else if (e.dead === 'fall') {
@@ -1419,8 +1897,14 @@
         ctx.fillStyle = `rgba(236,220,196,${1 - p.t / p.life})`;
         const r = 1 + Math.round(p.t * 10);
         ctx.fillRect(px - r, py - r, r * 2, r * 2);
+      } else if (p.kind === 'icon') {
+        const img = SPR[p.img];
+        ctx.globalAlpha = Math.max(0, Math.min(1, (p.life - p.t) * 4)) * (p.lost ? 0.6 : 1);
+        const sx = px + Math.round(Math.sin(p.t * 9) * (p.sway || 0) * 0.3) - Math.floor(img.width / 2);
+        ctx.drawImage(img, sx, py - img.height);
+        ctx.globalAlpha = 1;
       } else if (p.kind === 'text') {
-        ctx.globalAlpha = Math.min(1, (p.life - p.t) * 3);
+        ctx.globalAlpha = Math.min(1, (p.life - p.t) * 5);
         ctx.lineWidth = 3; ctx.strokeStyle = '#281c34'; ctx.strokeText(p.text, px, py);
         ctx.fillStyle = p.color; ctx.fillText(p.text, px, py);
         ctx.globalAlpha = 1;
@@ -1447,6 +1931,7 @@
       ctx.lineWidth = 4; ctx.strokeStyle = '#281c34'; ctx.strokeText('ミス！', viewW / 2, viewH / 2 - 10);
       ctx.fillStyle = '#fff'; ctx.fillText('ミス！', viewW / 2, viewH / 2 - 10);
     }
+    if (theme.snowfall) drawSnowfall();
     if (fadeT > 0) { ctx.fillStyle = `rgba(16,20,40,${fadeT * 1.6})`; ctx.fillRect(0, 0, viewW, viewH); }
     drawIris(camY);
   }
@@ -1562,17 +2047,30 @@
   tap('btn-new-no', () => { confirmNew.hidden = true; });
   tap('btn-continue', () => { resetRun(); enterMap(save.last || 0); });
   tap('btn-title', enterTitle);
+  tap('btn-world-prev', () => { if (WORLDS[mapWorld - 1]) enterMap(firstOfWorld(mapWorld - 1)); });
+  tap('btn-world-next', () => {
+    const i = firstOfWorld(mapWorld + 1);
+    if (i >= 0 && unlocked(i)) enterMap(i);
+  });
   tap('btn-play', () => { if (STAGES[mapSel].playable && unlocked(mapSel)) enterStage(mapSel); });
 
-  let mapSel = 0;
+  let mapSel = 0, mapWorld = 1;
   const unlocked = i => i === 0 || !!save.cleared[STAGES[i - 1].id];
+  const firstOfWorld = w => STAGES.findIndex(st => st.w === w);
   function enterMap(sel, from) {
     state = 'map'; showActors = false;
-    buildLevel('1-1'); enemies = []; items = []; particles.length = 0; boss = null;
-    setSat(save.cleared[STAGES[0].id] ? 1 : 0.35, false);
+    mapWorld = STAGES[sel].w;
+    if (from !== undefined && STAGES[from].w !== mapWorld) from = undefined;
+    buildLevel(`${mapWorld}-1`); enemies = []; items = []; particles.length = 0; boss = null; movers = [];
+    setSat(save.cleared[`${mapWorld}-1`] ? 1 : 0.35, false);
     showMenuScene(mapScreen);
     mapNodes.innerHTML = '';
+    document.getElementById('map-world').textContent = 'WORLD ' + mapWorld;
+    const prevW = WORLDS[mapWorld - 1], nextW = WORLDS[mapWorld + 1];
+    document.getElementById('btn-world-prev').disabled = !prevW;
+    document.getElementById('btn-world-next').disabled = !nextW || !unlocked(firstOfWorld(mapWorld + 1));
     STAGES.forEach((st, i) => {
+      if (st.w !== mapWorld) return;
       const b = document.createElement('button');
       const open = unlocked(i);
       const cls = ['node'];
@@ -1591,7 +2089,7 @@
       const icon = b.querySelector('canvas');
       const icx = icon.getContext('2d');
       let img = SPR.LETTERBLK;
-      if (st.boss) img = SPR.GEKO;
+      if (st.boss) img = SPR[WORLDS[st.w].icon];
       else if (save.cleared[st.id]) img = SPR.POST;
       else if (!open) img = USED;
       icon.width = img.width; icon.height = img.height;
@@ -1608,8 +2106,8 @@
   function selectNode(i, instant) {
     if (!unlocked(i)) return;
     mapSel = i;
-    [...mapNodes.children].forEach((n, k) => n.classList.toggle('sel', k === i));
-    const node = mapNodes.children[i];
+    [...mapNodes.children].forEach(n => n.classList.toggle('sel', n.id === 'node-' + STAGES[i].id));
+    const node = document.getElementById('node-' + STAGES[i].id);
     const dot = node.querySelector(".icon");
     const track = mapHero.parentElement.getBoundingClientRect(), d = dot.getBoundingClientRect();
     const x = d.left - track.left + d.width / 2 - mapHero.offsetWidth / 2;
@@ -1618,7 +2116,7 @@
     const st = STAGES[i];
     playBtn.disabled = !st.playable;
     playBtn.textContent = st.playable ? 'PLAY ' + st.label : 'COMING SOON';
-    document.getElementById('map-title').textContent = st.boss ? '大ガエル ゲコドン' : 'はじまりの草原島';
+    document.getElementById('map-title').textContent = st.boss ? WORLDS[st.w].boss : WORLDS[st.w].name;
   }
 
   // ---- 会話（1場面 2〜5往復）
@@ -1629,11 +2127,24 @@
     { who: 'pocchi', text: 'かけらを取りもどせば、光がもどるよ。' },
     { who: 'postman', text: 'よし、配達に出発だ！' },
   ];
-  const CHAPTER1_END = [
+  const CHAPTER_END = {};
+  CHAPTER_END[1] = [
     { who: 'pocchi', text: '見て！　灯台に光がもどったよ！' },
     { who: 'postman', text: 'やった！　草原にも色がもどった！' },
     { who: 'pocchi', text: '次の島への橋もかかったよ。' },
     { who: 'postman', text: 'あと4つ。いっしょにがんばろう！' },
+  ];
+  CHAPTER_END[2] = [
+    { who: 'pocchi', text: '砂の島にも、光がもどったね！' },
+    { who: 'postman', text: '遺跡に古い写真があった。灯台と…男爵？' },
+    { who: 'pocchi', text: '男爵は、むかし灯台守だったんだって。' },
+    { who: 'postman', text: 'どうして光をうばったんだろう…。' },
+  ];
+  CHAPTER_END[3] = [
+    { who: 'pocchi', text: 'この郵便ポスト、手紙でいっぱい！' },
+    { who: 'postman', text: '全部、男爵あてだ。島のみんなからだよ。' },
+    { who: 'pocchi', text: 'でも、ずっと届いてなかったんだね…。' },
+    { who: 'postman', text: 'ぼくが届ける。それが仕事だから！' },
   ];
   const WHO = {
     postman: { name: 'ポストマン', face: 'STAND', cls: '' },
@@ -1642,9 +2153,10 @@
   let dlg = null;
   const dlgName = document.getElementById('dialog-name');
   const dlgText = document.getElementById('dialog-text');
-  function playDialog(lines, done, atLighthouse) {
+  function playDialog(lines, done, sceneId) {
+    const atLighthouse = !!sceneId;
     state = 'dialog'; showActors = false;
-    buildLevel(atLighthouse ? '1-3' : '1-1'); enemies = []; items = []; particles.length = 0; boss = null; bigGem = null;
+    buildLevel(sceneId || '1-1'); enemies = []; items = []; particles.length = 0; boss = null; bigGem = null;
     run.checkpoint = false; placePlayer(); showActors = true;
     if (atLighthouse) {
       // 1-3 のゴールの先、光がもどった灯台の前で話す
@@ -1689,7 +2201,7 @@
     else if (state === 'dialog') want = dlg ? dlg.music : null;
     else if (state === 'play' || state === 'pause') {
       if (boss && boss.dead) return;
-      want = run.invT > 0 ? 'invincible' : THEME_SONG[Object.keys(THEMES).find(k => THEMES[k] === theme)];
+      want = run.invT > 0 ? 'invincible' : theme.song;
     } else return;      // ミス・ゴール・ゲームオーバー中は、その場の音にまかせる
     if (want && SND.current !== want) SND.play(want);
   }

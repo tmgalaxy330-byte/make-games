@@ -157,6 +157,25 @@
         'F2 C3 | F2 A2 | C3 G2 | F2 C3 | Bb2 F3 | G2 D3 | C3 C3 | F2 C3 | F2 C3 | Bb2 F3 | C3 G2 | F2 A2 | D3 A2 | C3 G2 | C3 C3 | F2 . ' },
       { drum: true, vol: 0.08, step: 0.5, notes: 'k . h . s . h . | k . h . s . h h ' },
     ] },
+    // ワールド2 砂丘：エキゾチック（和声的短音階）
+    desert: { bpm: 128, tracks: [
+      { wave: 0.125, vol: 0.15, step: 0.5, notes:
+        'D5 . F5 E5 | D5 C#5 D5 . | A4 . Bb4 C#5 | D5 - - . | F5 . G5 A5 | Bb5 A5 G5 F5 | E5 F5 E5 C#5 | D5 - - . ' +
+        'A5 . G5 F5 | E5 . F5 D5 | C5 . D5 E5 | F5 - E5 . | D5 . E5 F5 | G5 F5 E5 D5 | C#5 D5 E5 C#5 | D5 - - . ' },
+      { wave: 'tri', vol: 0.3, step: 0.5, notes:
+        'D3 . A2 . | D3 . A2 . | G2 . A2 . | D3 . A2 . | Bb2 . F3 . | G2 . D3 . | A2 . E3 . | D3 . A2 . ' +
+        'F2 . C3 . | C3 . G2 . | F2 . A2 . | Bb2 . F2 . | Bb2 . F3 . | G2 . D3 . | A2 . C#3 . | D3 . D3 . ' },
+      { drum: true, vol: 0.1, step: 0.5, notes: 'k . h k | s . h . ' },
+    ] },
+    // ワールド3 雪原：鈴のようにきらきら
+    snow: { bpm: 120, tracks: [
+      { wave: 0.125, vol: 0.13, step: 0.5, notes:
+        'B5 - G#5 E5 | F#5 - B4 . | C#5 E5 G#5 F#5 | E5 - - . | A5 - F#5 D#5 | E5 - B4 . | C#5 D#5 E5 F#5 | G#5 - - . ' +
+        'B5 - A5 G#5 | F#5 - E5 . | A5 - G#5 F#5 | E5 - C#5 . | D#5 - E5 F#5 | G#5 - A5 . | F#5 E5 D#5 F#5 | E5 - - . ' },
+      { wave: 'tri', vol: 0.28, step: 1, notes:
+        'E3 B2 | E3 B2 | A2 E3 | E3 B2 | F#2 C#3 | E3 B2 | A2 B2 | E3 B2 | E3 B2 | A2 E3 | F#2 C#3 | A2 E3 | B2 F#3 | E3 C#3 | B2 B2 | E3 . ' },
+      { drum: true, vol: 0.07, step: 0.5, notes: 'h . h . s . h . ' },
+    ] },
     // ボス：せまってくる感じ
     boss: { bpm: 164, tracks: [
       { wave: 0.25, vol: 0.14, step: 0.5, notes:

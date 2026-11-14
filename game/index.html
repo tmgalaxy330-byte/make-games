@@ -90,7 +90,11 @@
 
 <!-- ステージ選択 -->
 <div class="scene" id="map-screen" hidden>
-  <div class="map-head"><small>WORLD 1</small><b id="map-title">はじまりの草原島</b></div>
+  <div class="map-top">
+    <button id="btn-world-prev" class="sub wbtn" aria-label="前のワールド">◀</button>
+    <div class="map-head"><small id="map-world">WORLD 1</small><b id="map-title">はじまりの草原島</b></div>
+    <button id="btn-world-next" class="sub wbtn" aria-label="次のワールド">▶</button>
+  </div>
   <div class="map-track">
     <div class="map-line"></div>
     <div class="map-nodes" id="map-nodes"></div>
