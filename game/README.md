@@ -21,4 +21,5 @@
 - `index.html` … 画面とボタン
 - `style.css` … 見た目（ボタン・表示）
 - `sprites.js` … ドット絵データ
+- `audio.js` … 効果音とBGM（Web Audioで作るファミコン風の音。曲はオリジナル）
 - `main.js` … ゲームの動き（物理・当たり判定・描画）

@@ -301,3 +301,18 @@ body.cutscene #pad, body.cutscene #hud, body.menu #pad, body.menu #hud { opacity
 .node.boss .icon { width: 70px; }
 .map-track { padding-top: 56px; }
 .map-line { top: calc(56px + 40px); }
+
+/* 音のON/OFF */
+.pill.sound .spk {
+  width: 18px; height: 16px; display: block; background: #fff;
+  clip-path: polygon(0 30%, 30% 30%, 60% 0, 60% 100%, 30% 70%, 0 70%);
+  position: relative;
+}
+.pill.sound::after {
+  content: ""; width: 6px; height: 12px; margin-left: -2px;
+  border: 3px solid #fff; border-left: 0; border-radius: 0 8px 8px 0;
+}
+.pill.sound.off::after { content: "×"; width: auto; height: auto; border: 0; font-size: 16px; color: #ff9aa0; margin-left: 0; }
+.sound-title { position: absolute; right: max(20px, env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  min-width: 0 !important; padding: 8px 14px !important; font-size: 13px !important; }
+.sound-title.off { opacity: .75; }

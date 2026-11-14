@@ -17,6 +17,9 @@ out = f'''<title>ミスターポストマン</title>
 {(root / 'sprites.js').read_text()}
 </script>
 <script>
+{(root / 'audio.js').read_text()}
+</script>
+<script>
 {(root / 'main.js').read_text()}
 </script>
 '''

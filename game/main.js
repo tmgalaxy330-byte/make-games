@@ -51,6 +51,8 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const SPR = window.SPR;
+  const SND = window.SOUND || { sfx: new Proxy({}, { get: () => () => {} }), play() {}, stop() {}, pause() {}, setEnabled() {}, enabled: false };
+  const sfx = SND.sfx;
 
   // ------------------------------------------------------------------ ステージ（1-1 試作）
   // '#'=地面 '='=板（下から通りぬけ可） 'B'=手紙ブロック 'P'=小包ブロック
@@ -439,7 +441,7 @@
   function syncInput() {
     const raw = {};
     for (const k in input) raw[k] = touchKeys[k] || keyKeys[k];
-    if (raw.dash && !dashRawPrev) setDash(!dashMode);
+    if (raw.dash && !dashRawPrev) { setDash(!dashMode); sfx.click(); }
     dashRawPrev = raw.dash;
     input.left = raw.left; input.right = raw.right; input.jump = raw.jump; input.throw = raw.throw;
     input.dash = dashMode;
@@ -513,9 +515,10 @@
   function damage() {
     if (run.invT > 0 || run.hurtT > 0 || state !== 'play') return;
     // なくなる順番：カバン → パワーアップ → ハート
-    if (run.bag) { run.bag = false; popText('カバンがやぶれた！'); }
+    if (run.bag) { run.bag = false; popText('カバンがやぶれた！'); sfx.bagRip(); }
     else if (run.power) { popText(NAMES[run.power] + 'をなくした'); run.power = null; }
     else { run.hearts--; }
+    if (!run.bag) sfx.hurt();
     run.hurtT = RULE.iframes;
     player.vy = Math.min(player.vy, -140);
     player.vx = -player.face * 60;
@@ -526,6 +529,7 @@
   function miss() {
     if (state !== 'play') return;
     state = 'miss'; missT = 1.2;
+    sfx.miss();
     player.vx = 0; player.vy = -220;
   }
 
@@ -533,6 +537,7 @@
     if (run.lives <= 0) {
       state = 'over';
       overMenu.hidden = false;
+      SND.play('over', { once: true });
       return;
     }
     run.lives--;
@@ -544,9 +549,10 @@
 
   // ------------------------------------------------------------------ 切手・アイテム
   function addStamps(n, x, y) {
+    sfx.stamp();
     for (let i = 0; i < n; i++) {
       run.stamps++;
-      if (run.stamps % RULE.stampsFor1up === 0) { run.lives++; popText('1UP！', '#7dff8a'); }
+      if (run.stamps % RULE.stampsFor1up === 0) { run.lives++; popText('1UP！', '#7dff8a'); sfx.oneup(); }
     }
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2;
@@ -563,17 +569,17 @@
     const x = player.x, y = player.y;
     if (POWERS.includes(kind)) {
       if (run.power === kind) { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
-      else { run.power = kind; popText(NAMES[kind] + '！', '#ffec96'); }
+      else { run.power = kind; popText(NAMES[kind] + '！', '#ffec96'); sfx.power(); }
     } else if (kind === 'bag') {
       if (run.bag) { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
-      else { run.bag = true; popText('大きな配達カバン！', '#ffec96'); }
+      else { run.bag = true; popText('大きな配達カバン！', '#ffec96'); sfx.power(); }
     } else if (kind === 'onigiri') {
-      if (run.hearts < RULE.hearts) { run.hearts++; popText('ハート回復！', '#ff9aa0'); }
+      if (run.hearts < RULE.hearts) { run.hearts++; popText('ハート回復！', '#ff9aa0'); sfx.heal(); }
       else { addStamps(RULE.dupStamps, x, y); popText('切手 +' + RULE.dupStamps, '#ffec96'); }
     } else if (kind === 'scarf') {
-      run.invT = RULE.invincible; popText('むてき！', '#fff4aa');
+      run.invT = RULE.invincible; popText('むてき！', '#fff4aa'); sfx.power();
     } else if (kind === 'oneup') {
-      run.lives++; popText('1UP！', '#7dff8a');
+      run.lives++; popText('1UP！', '#7dff8a'); sfx.oneup();
     }
     updateHud();
   }
@@ -582,6 +588,7 @@
     const c = level[ty][tx];
     if (c !== 'B' && c !== 'P' && c !== 'H') return;
     bumps.push({ tx, ty, t: 0 });
+    sfx.bump();
     const key = tx + ',' + ty;
     const what = contents[key] || 'stamp';
     // ブロックの上にいる敵ははね飛ばす
@@ -593,6 +600,7 @@
       addStamps(1, tx * TILE + 2, ty * TILE - 14);
     } else {
       items.push({ kind: what, x: tx * TILE, y: ty * TILE, w: 16, h: 16, rise: 0, baseY: ty * TILE });
+      sfx.sprout();
     }
     if (c === 'P') {
       parcelHits[key] = (parcelHits[key] || 0) + 1;
@@ -604,7 +612,7 @@
   function killEnemy(e, how) {
     if (e.dead) return;
     e.dead = how; e.deadT = 0;
-    if (how === 'fall') { e.vy = -160; e.vx = (e.x < player.x ? -1 : 1) * 40; }
+    if (how === 'fall') { e.vy = -160; e.vx = (e.x < player.x ? -1 : 1) * 40; sfx.kick(); }
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + 0.6;
       particles.push({ kind: 'spark', x: e.x + 6, y: e.y + 6, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, t: 0, life: 0.3 });
@@ -673,7 +681,7 @@
       if (run.invT > 0) { killEnemy(e, 'fall'); continue; }
       const fromAbove = player.vy > 0 && player.prevBottom <= e.y + 6;
       if ((e.kind === 'moyan' || e.kind === 'pata') && fromAbove) {
-        killEnemy(e, 'squash');
+        killEnemy(e, 'squash'); sfx.stomp();
         player.y = e.y - player.h;
         player.vy = -(input.jump ? PHYS.stompHigh : PHYS.stomp);
         player.jumping = input.jump;
@@ -752,10 +760,12 @@
       // 速く走っているほど高く跳べる（歩きの速さ以下は通常ジャンプ）
       const k = Math.max(0, Math.min(1, (Math.abs(player.vx) - PHYS.run) / (PHYS.dash - PHYS.run)));
       player.vy = -lerp(PHYS.jump, PHYS.dashJump, k); player.buffer = 0; player.coyote = 0;
+      sfx.jump();
       player.onGround = false; player.jumping = true;
     } else if (jumpPressed && !player.onGround && run.power === 'boots' && !player.usedDouble) {
       // バネぐつ：空中でもう1回ジャンプ
       player.vy = -PHYS.doubleJump; player.usedDouble = true; player.jumping = true; player.buffer = 0;
+      sfx.jump2();
       for (let i = 0; i < 6; i++) {
         particles.push({ kind: 'dust', x: player.x + player.w / 2 + (i - 2.5) * 3, y: player.y + player.h, vx: (i - 2.5) * 12, vy: 20, t: 0, life: 0.3 });
       }
@@ -772,6 +782,7 @@
     const throwPressed = input.throw && !throwPrev;
     throwPrev = input.throw;
     if (throwPressed && run.power === 'lantern' && balls.length < 2) {
+      sfx.fire();
       balls.push({ x: player.x + player.w / 2 + player.face * 6 - 3, y: player.y + 6, w: 6, h: 6, vx: player.face * 170, vy: 40, t: 0 });
     }
 
@@ -807,7 +818,7 @@
       else if (tc === 'K') {
         level[ty][tx] = '.';
         run.gems[gemSpots[tx + ',' + ty]] = true;
-        popText('ヒカリのかけら！', '#9ef0ff');
+        popText('ヒカリのかけら！', '#9ef0ff'); sfx.gem();
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * Math.PI * 2;
           particles.push({ kind: 'spark', x: tx * TILE + 8, y: ty * TILE + 8, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, t: 0, life: 0.4 });
@@ -820,7 +831,7 @@
     if (player.y > ROWS * TILE + 24) { run.hearts = 0; updateHud(); miss(); }
 
     // ---- 中間ポスト
-    if (CHECKPOINT && !run.checkpoint && player.x > CHECKPOINT.x) { run.checkpoint = true; popText('中間ポスト！', '#ffec96'); }
+    if (CHECKPOINT && !run.checkpoint && player.x > CHECKPOINT.x) { run.checkpoint = true; popText('中間ポスト！', '#ffec96'); sfx.check(); }
 
     // ---- ゴール
     if (goal && player.x + player.w > goal.x + 2 && player.x < goal.x + goal.w - 2 && player.y + player.h > goal.y) {
@@ -881,6 +892,8 @@
     if (goal) player.x = Math.min(player.x, goal.x - player.w - 1);    // ポストの横に立つ
     run.invT = 0; run.hurtT = 0;
     document.body.classList.add('cutscene');
+    SND.stop();
+    setTimeout(() => { if (state === 'goal') SND.play('clear', { once: true }); }, 600);
     if (goal) {
       particles.push({ kind: 'letter', sx: player.x + player.w / 2, sy: player.y + 6,
         ex: goal.x + 7, ey: goal.y + 3, x: 0, y: 0, t: 0, life: GOAL.letter });
@@ -1008,12 +1021,12 @@
       else if (p.kind === 'letter') {
         const k = Math.min(1, p.t / p.life);
         p.x = lerp(p.sx, p.ex, k); p.y = lerp(p.sy, p.ey, k) - Math.sin(k * Math.PI) * 18;
-        if (k >= 1 && !p.done) { p.done = true; postBounce = 0.35; burst(goal.x + 8, goal.y - 6); }
+        if (k >= 1 && !p.done) { p.done = true; postBounce = 0.35; burst(goal.x + 8, goal.y - 6); sfx.drop(); }
       }
       else if (p.kind === 'fw') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; p.vy = p.vy * 0.97 + 40 * dt; }
       else if (p.kind === 'rocket') {
         p.y += p.vy * dt;
-        if (p.t >= p.life && !p.done) { p.done = true; burst(p.x, p.y); }
+        if (p.t >= p.life && !p.done) { p.done = true; burst(p.x, p.y); sfx.boom(); }
       }
       else { p.x += p.vx * dt; p.y += p.vy * dt; }
     }
@@ -1137,7 +1150,7 @@
     const wasAir = b.mode === 'air';
     moveBody(b, dt);
     if (wasAir && b.onGround && b.t > 0.1) {
-      b.mode = 'idle'; b.t = 0; b.vx = 0; shake = 0.3;
+      b.mode = 'idle'; b.t = 0; b.vx = 0; shake = 0.3; sfx.thud();
       for (const dir of [-1, 1]) {
         shockwaves.push({ x: b.x + b.w / 2, dir, speed: 120 + speedUp * 60, t: 0, y: b.y + b.h });
       }
@@ -1171,6 +1184,7 @@
     const b = boss;
     b.hp = Math.max(0, b.hp - amount);
     b.hurtT = stomped ? 1.0 : 0.25;
+    sfx.bossHit();
     if (stomped) {
       player.vy = -PHYS.stompHigh; player.jumping = input.jump; player.usedDouble = false;
       player.y = b.y - player.h;
@@ -1181,6 +1195,7 @@
     }
     if (b.hp <= 0.001) {
       b.dead = true; b.deadT = 0; b.vy = -200; shockwaves = [];
+      SND.stop(); sfx.bossDown();
       popText('やった！', '#ffec96');
     }
   }
@@ -1487,6 +1502,7 @@
     const toPause = force !== undefined ? force : state !== 'pause';
     state = toPause ? 'pause' : 'play';
     pauseMenu.hidden = !toPause;
+    SND.pause(toPause);
     for (const k in touchKeys) touchKeys[k] = false;
     syncInput();
   }
@@ -1638,7 +1654,7 @@
     }
     setSat(atLighthouse ? 1 : 0, false);       // プロローグは色が消えた世界
     showMenuScene(dialogEl);
-    dlg = { lines, i: -1, done, shown: 0, full: true };
+    dlg = { lines, i: -1, done, shown: 0, full: true, music: atLighthouse ? 'warm' : 'sad' };
     nextLine();
   }
   function nextLine() {
@@ -1656,13 +1672,43 @@
     dlg.acc += dt;
     const text = dlg.lines[dlg.i].text;
     const n = Math.min(text.length, Math.floor(dlg.acc / 0.045));
-    if (n !== dlg.shown) { dlg.shown = n; dlgText.textContent = text.slice(0, n); }
+    if (n !== dlg.shown) { dlg.shown = n; dlgText.textContent = text.slice(0, n); if (n % 2 === 0) sfx.blip(); }
     if (n >= text.length) dlg.full = true;
   }
   document.getElementById('dialog-box').addEventListener('click', nextLine);
   tap('btn-skip', () => { if (dlg) { const d = dlg.done; dlg = null; d(); } });
   // アプリを切りかえたら自動で一時停止
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') togglePause(true); });
+
+  // ------------------------------------------------------------------ BGM えらび
+  const THEME_SONG = { meadow: 'meadow', forest: 'forest', sunset: 'sunset', storm: 'boss' };
+  function updateMusic() {
+    let want = null;
+    if (state === 'title') want = 'title';
+    else if (state === 'map') want = 'map';
+    else if (state === 'dialog') want = dlg ? dlg.music : null;
+    else if (state === 'play' || state === 'pause') {
+      if (boss && boss.dead) return;
+      want = run.invT > 0 ? 'invincible' : THEME_SONG[Object.keys(THEMES).find(k => THEMES[k] === theme)];
+    } else return;      // ミス・ゴール・ゲームオーバー中は、その場の音にまかせる
+    if (want && SND.current !== want) SND.play(want);
+  }
+  // 画面のボタンを押した音
+  document.addEventListener('click', e => { if (e.target.closest('.scene button, .panel button')) sfx.select(); });
+  // 音のON/OFF
+  function refreshSoundButtons() {
+    for (const id of ['btn-sound', 'btn-sound-title']) {
+      const b = document.getElementById(id);
+      if (!b) continue;
+      b.classList.toggle('off', !SND.enabled);
+      b.setAttribute('aria-label', SND.enabled ? '音を消す' : '音を出す');
+      if (id === 'btn-sound-title') b.textContent = SND.enabled ? 'SOUND ON' : 'SOUND OFF';
+    }
+  }
+  for (const id of ['btn-sound', 'btn-sound-title']) {
+    document.getElementById(id).addEventListener('click', () => { SND.setEnabled(!SND.enabled); refreshSoundButtons(); });
+  }
+  refreshSoundButtons();
 
   // ------------------------------------------------------------------ ループ
   let last = performance.now(), acc = 0;
@@ -1685,6 +1731,7 @@
         pocchi.y = lerp(pocchi.y, player.y - 14 + Math.sin(pocchi.t * 3) * 3, Math.min(1, dt * 3));
       }
     }
+    updateMusic();
     draw();
     requestAnimationFrame(frame);
   }
