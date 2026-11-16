@@ -95,6 +95,9 @@
     check()  { arp([79, 84, 91], 0.07, 0.5, 0.18); },
     click()  { tone(sfxBus, now(), { wave: 0.5, f: 880, dur: 0.035, vol: 0.12 }); },
     select() { const t = now(); tone(sfxBus, t, { wave: 0.25, f: 660, dur: 0.04, vol: 0.14 }); tone(sfxBus, t + 0.045, { wave: 0.25, f: 990, dur: 0.06, vol: 0.14 }); },
+    swim()   { tone(sfxBus, now(), { wave: 0.5, f: 380, f2: 620, dur: 0.08, vol: 0.1 }); },
+    crumble(){ noise(sfxBus, now(), { dur: 0.18, vol: 0.18, lp: 1200 }); },
+    zap()    { const t = now(); tone(sfxBus, t, { wave: 0.125, f: 1600, f2: 900, dur: 0.06, vol: 0.06 }); },
     blip()   { tone(sfxBus, now(), { wave: 0.25, f: 1200, dur: 0.02, vol: 0.06 }); },
     drop()   { tone(sfxBus, now(), { wave: 0.5, f: 900, f2: 300, dur: 0.15, vol: 0.18 }); },
     boom()   { const t = now(); noise(sfxBus, t, { dur: 0.45, vol: 0.18, lp: 1800 }); },
@@ -176,6 +179,20 @@
         'E3 B2 | E3 B2 | A2 E3 | E3 B2 | F#2 C#3 | E3 B2 | A2 B2 | E3 B2 | E3 B2 | A2 E3 | F#2 C#3 | A2 E3 | B2 F#3 | E3 C#3 | B2 B2 | E3 . ' },
       { drum: true, vol: 0.07, step: 0.5, notes: 'h . h . s . h . ' },
     ] },
+    // ワールド4 海岸：波がゆれるような6拍子
+    sea: { bpm: 138, tracks: [
+      { wave: 0.25, vol: 0.14, step: 0.5, notes:
+        'G5 - E5 C5 - E5 | G5 - A5 G5 - . | F5 - D5 B4 - D5 | F5 - G5 F5 - . | E5 - C5 A4 - C5 | E5 - F5 E5 - D5 | C5 - D5 E5 - G5 | C5 - - - - . ' },
+      { wave: 'tri', vol: 0.3, step: 1.5, notes: 'C3 G2 | C3 E3 | G2 D3 | G2 B2 | A2 E3 | F2 C3 | G2 G2 | C3 . ' },
+      { drum: true, vol: 0.08, step: 0.5, notes: 'k . h s . h ' },
+    ] },
+    // ワールド4 海の中：ゆらゆらしたアルペジオ
+    deep: { bpm: 96, tracks: [
+      { wave: 0.5, vol: 0.1, step: 0.5, notes:
+        'A4 C5 E5 A5 E5 C5 | G4 B4 D5 G5 D5 B4 | F4 A4 C5 F5 C5 A4 | E4 G#4 B4 E5 B4 G#4 ' },
+      { wave: 0.125, vol: 0.09, step: 1, notes: 'E5 - - D5 - C5 | B4 - - - - . | C5 - - E5 - A5 | G#5 - - - - . ' },
+      { wave: 'tri', vol: 0.26, step: 3, notes: 'A2 G2 F2 E2 ' },
+    ] },
     // ボス：せまってくる感じ
     boss: { bpm: 164, tracks: [
       { wave: 0.25, vol: 0.14, step: 0.5, notes:
@@ -208,14 +225,20 @@
       { wave: 0.125, vol: 0.1, step: 0.5, notes: 'G4 C5 E5 G5 | . E5 G5 - | B5 - C6 - | G5 - - - ' },
       { wave: 'tri', vol: 0.3, step: 1, notes: 'C3 G2 | C3 E3 | G2 G2 | C3 - ' },
     ] },
+    // 時間が少ないぞ！の合図
+    hurry: { bpm: 220, tracks: [
+      { wave: 0.25, vol: 0.18, step: 0.5, notes: 'E6 C6 E6 C6 E6 C6 G6 - ' },
+      { wave: 0.125, vol: 0.1, step: 0.5, notes: 'C6 A5 C6 A5 C6 A5 E6 - ' },
+    ] },
     over: { bpm: 96, tracks: [
       { wave: 0.5, vol: 0.14, step: 1, notes: 'C5 B4 Bb4 A4 | F4 G4 E4 . ' },
       { wave: 'tri', vol: 0.28, step: 2, notes: 'F2 D2 | G2 C2 ' },
     ] },
   };
 
-  function compile(song) {
-    const spb = 60 / song.bpm;
+  let tempo = 1;            // 曲の速さ（時間が少なくなると上がる）
+  function compile(song, mult = 1) {
+    const spb = 60 / (song.bpm * mult);
     let loopLen = 0;
     const tracks = song.tracks.map(tr => {
       const toks = tr.notes.split(/\s+/).filter(x => x && x !== '|');
@@ -232,9 +255,10 @@
     return { tracks, loopLen };
   }
   const compiled = {};
-  const get = name => compiled[name] || (compiled[name] = compile(SONGS[name] || JINGLES[name]));
+  const get = (name, mult = 1) => compiled[name + '@' + mult] || (compiled[name + '@' + mult] = compile(SONGS[name] || JINGLES[name], mult));
 
   let current = null, songGain = null, timer = null, pendingSong = null, paused = false;
+  let curTempo = 1, holdUntil = 0, wanted = null;
   function scheduleLoop(c, gain, t0) {
     for (const { tr, len, ev } of c.tracks) {
       // 短いトラック（ドラムなど）は曲の長さまでくり返す
@@ -256,11 +280,14 @@
 
   function play(name, { once = false } = {}) {
     if (!SONGS[name] && !JINGLES[name]) return;
-    if (current === name && !once) return;
+    if (current === name && curTempo === tempo && !once) return;
+    if (!once && performance.now() < holdUntil) { wanted = name; current = name; return; }   // 合図の音が鳴っている間は待つ
     if (!ctx || ctx.state !== 'running') { pendingSong = name; current = name; return; }
     stop();
     current = name;
-    const c = get(name);
+    const mult = once ? 1 : tempo;
+    curTempo = tempo;
+    const c = get(name, mult);
     songGain = ctx.createGain(); songGain.connect(musicBus);
     let t0 = ctx.currentTime + 0.06;
     scheduleLoop(c, songGain, t0);
@@ -281,6 +308,25 @@
     }
     current = null;
   }
+  // 「急げ！」：合図を鳴らしてから、同じ曲を速いテンポで鳴らしなおす
+  function hurry() {
+    if (!ctx || !enabled) { tempo = 1.35; return; }
+    const song = current;
+    stop();
+    play('hurry', { once: true });
+    holdUntil = performance.now() + 1100;
+    wanted = song; current = song;
+    setTimeout(() => {
+      holdUntil = 0; tempo = 1.35;
+      const n = wanted; wanted = null; current = null;
+      if (n) play(n);
+    }, 1100);
+  }
+  function setTempo(m) {
+    if (tempo === m) return;
+    tempo = m; holdUntil = 0;
+    if (current && SONGS[current]) { const n = current; current = null; play(n); }
+  }
   function pause(p) {
     paused = p;
     if (!ctx) return;
@@ -299,7 +345,8 @@
   for (const k of Object.keys(S)) sfx[k] = () => { if (ctx && enabled && ctx.state === 'running') { try { S[k](); } catch (e) { /* 音が出なくても遊べる */ } } };
 
   window.SOUND = {
-    sfx, play, stop, pause, setEnabled,
+    sfx, play, stop, pause, setEnabled, hurry, setTempo,
+    get tempo() { return tempo; },
     get enabled() { return enabled; },
     get current() { return current; },
     get state() { return ctx ? ctx.state : 'none'; },

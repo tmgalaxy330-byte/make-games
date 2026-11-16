@@ -319,3 +319,9 @@ body.cutscene #pad, body.cutscene #hud, body.menu #pad, body.menu #hud { opacity
 .map-top { display: flex; align-items: center; gap: 18px; }
 .scene button.wbtn { min-width: 0; padding: 10px 14px; font-size: 16px; }
 .scene button.wbtn:disabled { opacity: .35; }
+
+/* のこり時間：少なくなると赤く点めつ */
+#time { min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
+#time-pill.hurry { background: rgba(200,40,50,.8); animation: hurry .5s steps(2) infinite; }
+@keyframes hurry { 50% { background: rgba(120,20,30,.8); } }
+@media (prefers-reduced-motion: reduce) { #time-pill.hurry { animation: none; } }
