@@ -870,7 +870,7 @@
       if (!save.preboss) save.preboss = {};
     } catch (e) { save = emptySave(); }
   }
-  function writeSave() {
+  let writeSave = function () {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* 保存できない環境でも遊べる */ }
   }
   const hasSave = () => save.prologue || Object.keys(save.cleared).length > 0;
@@ -1182,7 +1182,7 @@
     state = 'play';
     showActors = true;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
-    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen')]) sc.hidden = true;
+    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen')]) sc.hidden = true;
     document.body.classList.remove('cutscene', 'menu');
     setSat(save.cleared[STAGES[stageIndex].id] ? 1 : 0.35, false);
     run.time = levelDef.time || (STAGES[stageIndex].boss ? 150 : 200);
@@ -2796,7 +2796,7 @@
     drawCheckpoint(camY);
     // ゴールのポスト
     const pb = postBounce > 0 ? Math.round(Math.sin((1 - postBounce / 0.35) * Math.PI) * 5) : 0;
-    if (goal) ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3 - pb);
+    if (goal && !(state === 'dialog' && sceneOpt.noPlayer)) ctx.drawImage(SPR.POST, Math.round(goal.x - cx) - 1, Math.round(goal.y - camY) - 3 - pb);
     if (levelDef.lighthouse && goal) drawLighthouse(goal.x + 6 * TILE - cx, 10 * TILE - camY);
 
     // 動く足場
@@ -2860,6 +2860,8 @@
   }
 
   function drawActors(camY, cx) {
+    drawSceneExtras(camY, cx);
+    if (sceneOpt.noPlayer && (state === 'dialog')) return;
     // 相棒ポッチ（光）
     const pxs = Math.round(pocchi.x - cx), pys = Math.round(pocchi.y - camY);
     ctx.fillStyle = 'rgba(255,250,200,.35)'; ctx.beginPath(); ctx.arc(pxs + 9, pys + 7, 11, 0, 7); ctx.fill();
@@ -2867,6 +2869,28 @@
 
     // 主人公
     drawPlayer(camY);
+  }
+
+  // 会話の場面に置く人物・小物（エンディングで使う）
+  function drawSceneExtras(camY, cx) {
+    if (state !== 'dialog' || !sceneOpt.extras) return;
+    for (const ex of sceneOpt.extras) {
+      if (ex.showFrom !== undefined && (!dlg || dlg.i < ex.showFrom)) continue;
+      ex.a = Math.min(1, (ex.a || 0) + 0.02);
+      const img = SPR[ex.img + (ex.flip ? '_L' : '')];
+      const x = Math.round(ex.x - cx), y = Math.round(ex.y - camY - img.height + Math.sin(time * (ex.bobSpeed || 0)) * (ex.bob || 0));
+      ctx.globalAlpha = ex.showFrom !== undefined ? ex.a : 1;
+      if (ex.aura) {
+        // 黒い雲のもや
+        for (let i = 0; i < 7; i++) {
+          ctx.fillStyle = 'rgba(20,10,40,.45)';
+          ctx.beginPath(); ctx.arc(x + img.width / 2 + Math.sin(time * 1.3 + i) * 10, y + img.height - 2 + Math.cos(time + i * 2) * 4, 8 + (i % 3) * 3, 0, 7); ctx.fill();
+        }
+      }
+      ctx.drawImage(img, x, y);
+      if (ex.glow) { ctx.fillStyle = `rgba(255,220,90,${0.5 + Math.sin(time * 4) * 0.3})`; ctx.fillRect(x + 6, y + 9, 2, 2); ctx.fillRect(x + 12, y + 9, 2, 2); }
+      ctx.globalAlpha = 1;
+    }
   }
 
   function finishDraw(camY, cx) {
@@ -2923,6 +2947,9 @@
       ctx.lineWidth = 4; ctx.strokeStyle = '#281c34'; ctx.strokeText('ミス！', viewW / 2, viewH / 2 - 10);
       ctx.fillStyle = '#fff'; ctx.fillText('ミス！', viewW / 2, viewH / 2 - 10);
     }
+    if (state === 'dialog' && sceneOpt.dark) { ctx.fillStyle = 'rgba(4,2,16,.62)'; ctx.fillRect(0, 0, viewW, viewH); }
+    if (state === 'credits') drawCredits(camY, cx);
+    if (blackT > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1, blackT)})`; ctx.fillRect(0, 0, viewW, viewH); }
     if (theme.snowfall) drawSnowfall();
     if (theme.water) drawWater();
     if (fadeT > 0) { ctx.fillStyle = `rgba(16,20,40,${fadeT * 1.6})`; ctx.fillRect(0, 0, viewW, viewH); }
@@ -3014,13 +3041,14 @@
   drawFace('map-hero', SPR.STAND);
 
   function showMenuScene(el) {
-    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen')]) sc.hidden = sc !== el;
+    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen')]) sc.hidden = sc !== el;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
     document.body.classList.add('menu');
     document.body.classList.remove('cutscene');
   }
 
   function enterTitle() {
+    sceneOpt = {};
     SND.setTempo(1);
     state = 'title'; showActors = false;
     buildLevel('1-1'); enemies = []; items = []; particles.length = 0; boss = null;
@@ -3183,6 +3211,128 @@
     { who: 'pocchi', text: '時の灯台が光ってる！　すべての島がつながったよ！' },
   ];
 
+  // ---- エンディング（7章のあと）：エピローグ → エンドロール → おまけの場面
+  // 正体のわからない影（ドット絵をその場で作る）
+  SPR.SHADOW = (() => {
+    const c = document.createElement('canvas'); c.width = 20; c.height = 30;
+    const g = c.getContext('2d');
+    g.fillStyle = '#3a3058';
+    g.fillRect(6, 0, 8, 2); g.fillRect(4, 2, 12, 4); g.fillRect(3, 6, 14, 6); g.fillRect(2, 12, 16, 10); g.fillRect(1, 22, 18, 8);
+    g.fillStyle = '#0c0a14';
+    g.fillRect(7, 1, 6, 2); g.fillRect(5, 3, 10, 4); g.fillRect(4, 7, 12, 6); g.fillRect(3, 13, 14, 10); g.fillRect(2, 23, 16, 7);
+    g.fillStyle = '#ffd23c'; g.fillRect(7, 9, 2, 1); g.fillRect(11, 9, 2, 1);
+    return c;
+  })();
+  SPR.SHADOW_L = SPR.SHADOW;
+  SPR.BLACKLETTER = (() => {
+    const c = document.createElement('canvas'); c.width = 12; c.height = 9;
+    const g = c.getContext('2d');
+    g.fillStyle = '#5a4a78'; g.fillRect(0, 0, 12, 9);
+    g.fillStyle = '#141020'; g.fillRect(1, 1, 10, 7);
+    g.fillStyle = '#3a3058'; g.fillRect(2, 2, 2, 1); g.fillRect(4, 3, 2, 1); g.fillRect(6, 3, 2, 1); g.fillRect(8, 2, 2, 1);
+    g.fillStyle = '#c8202a'; g.fillRect(5, 4, 2, 2);
+    return c;
+  })();
+  SPR.BLACKLETTER_L = SPR.BLACKLETTER;
+
+  const EPILOGUE = [
+    { who: 'pocchi', text: 'おじいちゃん、きっと見てるよ。' },
+    { who: 'postman', text: 'うん。…さあ、今日も配達だ！' },
+  ];
+  const POSTCREDIT = [
+    { who: 'toki', text: '…あずかっている手紙は、もう一通あったな。' },
+    { who: 'unknown', text: '――次は、わたしに届けてもらおうか。ミスターポストマン。' },
+  ];
+  const CREDITS = [
+    ['STAND', 'ミスターポストマン'], ['POCCHI', 'ポッチ'], ['MOYAN', 'モヤン'], ['TOGE', 'トゲボウシ'], ['PATA', 'パタクモ'],
+    ['MOGU', 'スナモグラ'], ['YUKI', 'ユキコロ'], ['SAKANA', 'サカナ'], ['UNI', 'ウニ'],
+    ['GEKO', '大ガエル ゲコドン'], ['ZARA_HEAD', '砂ムカデ ザラザラ'], ['SNOWMAN', '雪だるま将軍'], ['TAKO', '大ダコ ヌルリン'],
+    ['GEARBOT', 'ギアゴーレム'], ['TOKIMORI', '時の番人 トキモリ'], ['BARON', 'クモリ男爵'],
+  ];
+  const CREDIT_GAP = 2.3, CREDIT_SPEED = 62;
+  let creditT = 0, blackT = 0, blackDone = null;
+  const creditsEl = document.getElementById('credits-screen');
+
+  function playEnding() {
+    if (!window.PREVIEW_ENDING) { save.act2 = true; writeSave(); }
+    playDialog(EPILOGUE, startCredits, '1-3', 'ending');
+  }
+  function startCredits() {
+    state = 'credits'; showActors = false; creditT = 0;
+    buildLevel('1-1'); enemies = []; items = []; particles.length = 0; boss = null; movers = []; traps = [];
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < LEVEL_W; x++) level[y][x] = y >= 10 ? '#' : '.';
+    CHECKPOINT = null; goal = null;
+    camX = 0; setSat(1, false);
+    showMenuScene(creditsEl);
+  }
+  // エンドロール：キャラクターが順番に歩いていく。最後は3人で並んで歩く
+  const creditName = document.getElementById('credit-name');
+  function drawCredits(camY) {
+    const gy = Math.round(10 * TILE - camY);
+    let bestA = 0, bestName = '';
+    ctx.font = '10px "DotGothic16", "Hiragino Sans", sans-serif';
+    ctx.textAlign = 'center';
+    CREDITS.forEach(([key, name], i) => {
+      const t = creditT - 0.8 - i * CREDIT_GAP;
+      if (t < 0) return;
+      const img = SPR[key + '_L'] || SPR[key];
+      const x = Math.round(viewW + 10 - t * CREDIT_SPEED);
+      if (x < -img.width - 40) return;
+      const hop = Math.floor(t * 6) % 2;
+      const run = key === 'STAND' ? SPR[(hop ? 'RUN' : 'STAND') + '_L'] : img;
+      const flying = ['POCCHI', 'PATA', 'SAKANA'].includes(key);
+      const y = flying ? gy - img.height - 14 + Math.round(Math.sin(t * 4) * 3) : gy - img.height - hop;
+      ctx.drawImage(run, x, y);
+      // 名前：まん中あたりを通るときに出る（文字は画面の上にくっきり表示）
+      const mid = Math.abs(x + img.width / 2 - viewW / 2);
+      const a = Math.max(0, 1 - mid / (viewW * 0.35));
+      if (a > bestA) { bestA = a; bestName = name; }
+    });
+    creditName.textContent = bestName;
+    creditName.style.opacity = bestA.toFixed(2);
+    // さいご：ポストマン・ポッチ・男爵がならんで右へ歩いていく
+    // 最後のキャラクターが画面の外へ出てから
+    const tEnd = 0.8 + (CREDITS.length - 1) * CREDIT_GAP + (viewW + 50) / CREDIT_SPEED;
+    const tf = creditT - tEnd;
+    if (tf > 0) {
+      const x = Math.round(-30 + Math.min(tf, 4.2) * 46);
+      const hop = tf < 4.2 ? Math.floor(tf * 6) % 2 : 0;
+      ctx.drawImage(SPR.BARON, x - 26, gy - SPR.BARON.height - hop);
+      ctx.drawImage(SPR[hop ? 'RUN' : 'STAND'], x, gy - SPR.STAND.height - hop);
+      ctx.drawImage(SPR.POCCHI, x + 18, gy - 40 + Math.round(Math.sin(tf * 4) * 3));
+      if (tf > 4.6 && tf < 6.2) {
+        // 立ち止まって、手紙をかかげる
+        ctx.drawImage(SPR.LETTER_1UP, x + 2, gy - SPR.STAND.height - 14);
+        if (Math.floor(tf * 3) % 2 === 0) popJoyAt(x + 8, gy - 40);
+      }
+    }
+    if (tf > 7.4 && !blackDone) startBlack(1.6, startPostCredit);
+  }
+  let joyCool = 0;
+  function popJoyAt(x, y) {
+    if (joyCool > 0) return;
+    joyCool = 0.35;
+    particles.push({ kind: 'icon', img: NOTE_IMGS[Math.floor(Math.random() * 3)], x: x + camX, y: y + (10 * TILE - (viewH - 46)), vy: -36, sway: 6, t: 0, life: 0.9 });
+  }
+  function startBlack(dur, done) { blackT = 0.001; blackDone = { dur, done }; }
+  function startPostCredit() {
+    // 夜の時の灯台：トキモリと黒い手紙。2つめのセリフで影があらわれる
+    blackT = 0; blackDone = null;
+    const g = LEVEL_DEFS['7-3'].goal * TILE;
+    playDialog(POSTCREDIT, () => startBlack(2.2, () => { blackT = 0; blackDone = null; enterTitle(); }), '7-3', 'none', {
+      noPlayer: true, dark: true,
+      extras: [
+        { img: 'TOKIMORI', x: g + 5 * TILE, y: 10 * TILE, flip: true },
+        { img: 'BLACKLETTER', x: g + 4 * TILE - 4, y: 10 * TILE - 10, bob: 1.5, bobSpeed: 2 },
+        { img: 'SHADOW', x: g + 9 * TILE, y: 10 * TILE - 6, showFrom: 1, aura: true, glow: true, bob: 2, bobSpeed: 1.2 },
+      ],
+    });
+    camX = Math.max(0, Math.min(g + 6 * TILE - viewW * 0.5, LEVEL_W * TILE - viewW));
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < LEVEL_W; x++) if (level[y][x] === 'K' || level[y][x] === '*') level[y][x] = '.';
+    CHECKPOINT = null;
+  }
+  tap('btn-credits-skip', () => { if (state === 'credits') { creditT = 999; } });
+
   // ---- 幕の終わり（第一幕おわり → 予告 → 第二幕へ ／ THE END）
   const actScreen = document.getElementById('act-screen');
   let actDone = null;
@@ -3191,6 +3341,7 @@
     buildLevel('1-1'); enemies = []; items = []; particles.length = 0; boss = null; movers = []; traps = [];
     // 幕の終わりは、すっきりした景色だけ（地面をひとつながりにする）
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < LEVEL_W; x++) level[y][x] = y >= 10 ? '#' : '.';
+    CHECKPOINT = null; goal = null;
     setSat(1, false);
     showMenuScene(actScreen);
     document.getElementById('act-title').textContent = title;
@@ -3204,8 +3355,7 @@
       showAct('第一幕　おわり', 'ACT 1 ・ THE END', () =>
         playDialog(TEASER, () => showAct('第二幕へ　つづく', 'TO BE CONTINUED', () => enterMap(next)), '1-1', 'map'));
     } else if (w === 7) {
-      save.act2 = true; writeSave();
-      showAct('THE END', 'ミスターポストマン　おしまい ・ ありがとう！', () => enterTitle());
+      playEnding();
     } else enterMap(next);
   }
   CHAPTER_END[3] = [
@@ -3220,11 +3370,14 @@
     baron: { name: 'クモリ男爵', face: 'BARON', cls: 'baron' },
     toki: { name: 'トキモリ', face: 'TOKIMORI', cls: 'toki' },
     letter: { name: '手紙', face: 'LETTER_1UP', cls: 'letter' },
+    unknown: { name: '？？？', face: 'SHADOW', cls: 'unknown' },
   };
   let dlg = null;
   const dlgName = document.getElementById('dialog-name');
   const dlgText = document.getElementById('dialog-text');
-  function playDialog(lines, done, sceneId, music) {
+  let sceneOpt = {};        // 会話の場面のオプション（主人公をかくす・暗くする・人物を置く）
+  function playDialog(lines, done, sceneId, music, opt = {}) {
+    sceneOpt = opt;
     const atLighthouse = !!sceneId;
     state = 'dialog'; showActors = false;
     SND.setTempo(1);
@@ -3239,7 +3392,8 @@
     }
     setSat(atLighthouse ? 1 : 0, false);       // プロローグは色が消えた世界
     showMenuScene(dialogEl);
-    dlg = { lines, i: -1, done, shown: 0, full: true, music: music || (atLighthouse ? 'warm' : 'sad') };
+    if (music === 'none') SND.stop();
+    dlg = { lines, i: -1, done, shown: 0, full: true, music: music === 'none' ? null : (music || (atLighthouse ? 'warm' : 'sad')) };
     nextLine();
   }
   function nextLine() {
@@ -3272,7 +3426,7 @@
     if (state === 'title') want = 'title';
     else if (state === 'map') want = 'map';
     else if (state === 'dialog') want = dlg ? dlg.music : null;
-    else if (state === 'act') want = 'ending';
+    else if (state === 'act' || state === 'credits') want = 'ending';
     else if (state === 'play' || state === 'pause') {
       if (boss && boss.dead) return;
       want = run.invT > 0 ? 'invincible' : theme.song;
@@ -3306,7 +3460,17 @@
       time += dt;
     } else {
       acc = 0;
-      if (state === 'title' || state === 'map' || state === 'act') {
+      if (blackDone) {
+        blackT += dt / blackDone.dur;
+        if (blackT >= 1.05) { const d = blackDone.done; blackDone = null; d(); }
+      }
+      if (joyCool > 0) joyCool -= dt;
+      if (state === 'credits') {
+        creditT += dt; time += dt;
+        camX += 14 * dt;
+        updateParticles(dt);
+        if (creditT > 900 && !blackDone) { creditT = 0.8 + (CREDITS.length - 1) * CREDIT_GAP + (viewW + 50) / CREDIT_SPEED + 7.5; }
+      } else if (state === 'title' || state === 'map' || state === 'act') {
         // 背景の世界をゆっくり流す
         camX = (camX + 18 * dt) % Math.max(1, LEVEL_W * TILE - viewW - 20);
         time += dt;
@@ -3326,7 +3490,17 @@
   resize();
   loadSave();
   resetRun();
-  enterTitle();
+  if (window.PREVIEW_ENDING) {
+    // 試写用：エンディングだけを見る（セーブは書きかえない）
+    for (const w of [1, 2, 3, 4, 5, 6, 7]) save.chapters[w] = true;
+    writeSave = () => {};
+    stageIndex = STAGES.findIndex(st => st.id === '7-B');
+    enterTitle();
+    const st = document.getElementById('btn-start'), cont = document.getElementById('btn-continue');
+    cont.hidden = true; st.classList.remove('sub'); st.textContent = 'エンディングを見る';
+    const fresh = st.cloneNode(true); st.replaceWith(fresh);
+    fresh.addEventListener('click', () => playDialog(CHAPTER_END[7], playEnding, '7-3', 'ending'));
+  } else enterTitle();
   requestAnimationFrame(frame);
 
   // テスト用（ブラウザの開発ツールから状態を見られる）
