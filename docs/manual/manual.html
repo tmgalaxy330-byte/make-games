@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ミスターポストマン 説明書</title>
+<style>
+  @font-face { font-family: "Dot"; src: url("../../game/fonts/DotGothic16-subset.woff2") format("woff2"); }
+  @page { size: A4; margin: 0; }
+  :root { --navy: #1d2240; --ink: #22263a; --sub: #5b6178; --orange: #ff8a3d; --teal: #1f9e9a; --sky: #e9f3ff; --line: #d6dcef; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; color: var(--ink); font-family: "IPAGothic", "IPAPGothic", sans-serif; font-size: 12.2pt; line-height: 1.75; }
+  .page { width: 210mm; height: 297mm; padding: 16mm 17mm 14mm; position: relative; overflow: hidden; page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .foot { position: absolute; bottom: 8mm; left: 17mm; right: 17mm; display: flex; justify-content: space-between; font-family: "Dot", "IPAGothic"; font-size: 9pt; color: var(--sub); }
+  h1, h2, h3, .dot { font-family: "Dot", "IPAGothic", sans-serif; font-weight: 400; }
+  h2 { font-size: 19pt; margin: 0 0 5mm; padding: 2.5mm 4mm; background: var(--navy); color: #fff; letter-spacing: .04em;
+       clip-path: polygon(0 3px,3px 3px,3px 0,calc(100% - 3px) 0,calc(100% - 3px) 3px,100% 3px,100% calc(100% - 3px),calc(100% - 3px) calc(100% - 3px),calc(100% - 3px) 100%,3px 100%,3px calc(100% - 3px),0 calc(100% - 3px)); }
+  h2 small { font-size: 10pt; color: #ffcf9e; margin-left: 3mm; }
+  h3 { font-size: 13.5pt; margin: 5mm 0 2mm; color: var(--navy); border-left: 5px solid var(--orange); padding-left: 3mm; line-height: 1.4; }
+  p { margin: 0 0 2.5mm; }
+  b, strong { color: #c4471a; font-weight: 700; }
+  img.shot { width: 100%; display: block; border: 3px solid var(--navy); image-rendering: auto; }
+  img.s { image-rendering: pixelated; vertical-align: middle; }
+  table { width: 100%; border-collapse: collapse; margin: 1mm 0 3mm; font-size: 11pt; line-height: 1.55; }
+  th, td { border: 1px solid var(--line); padding: 1.6mm 2.4mm; text-align: left; vertical-align: middle; }
+  th { background: var(--sky); font-family: "Dot", "IPAGothic"; font-weight: 400; color: var(--navy); white-space: nowrap; }
+  td.ic { width: 17mm; text-align: center; background: #f6f8fd; }
+  ol, ul { margin: 0 0 3mm; padding-left: 6mm; }
+  li { margin-bottom: 1.2mm; }
+  .box { background: var(--sky); border: 2px solid var(--line); padding: 3mm 4mm; margin: 3mm 0; border-radius: 2mm; }
+  .warn { background: #fff4e8; border-color: #ffd2a8; }
+  .box .t { font-family: "Dot", "IPAGothic"; color: var(--navy); font-size: 12pt; display: block; margin-bottom: 1mm; }
+  .num { display: inline-flex; align-items: center; justify-content: center; width: 6.2mm; height: 6.2mm; border-radius: 50%; background: var(--orange); color: #fff;
+         font-family: "Dot", "IPAGothic"; font-size: 10pt; line-height: 1; margin-right: 1.5mm; vertical-align: 1px; }
+  .num.b { background: var(--teal); }
+  .annot { position: relative; }
+  .annot .num { position: absolute; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px #fff; margin: 0; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  /* 表紙 */
+  .cover { background: linear-gradient(#bfe0ff, #fff 60%); }
+  .cover h1 { font-size: 34pt; text-align: center; margin: 4mm 0 0; color: var(--navy); letter-spacing: .06em; }
+  .cover .en { text-align: center; font-family: "Dot"; color: var(--sub); letter-spacing: .3em; margin-bottom: 5mm; }
+  .cover .story { font-size: 12.5pt; line-height: 1.95; margin: 5mm 2mm; }
+  .cover .story .q { display: block; text-align: center; font-family: "Dot", "IPAGothic"; font-size: 14pt; color: #c4471a; margin-top: 2mm; }
+  .cast { display: flex; justify-content: center; gap: 10mm; margin: 4mm 0; align-items: flex-end; }
+  .cast div { text-align: center; font-size: 10pt; color: var(--sub); }
+  .qrrow { display: flex; gap: 5mm; align-items: center; background: #fff; border: 3px solid var(--navy); padding: 3mm 4mm; }
+  .qrrow img { width: 30mm; height: 30mm; image-rendering: pixelated; }
+  .url { font-family: "Dot", monospace; font-size: 12.5pt; color: var(--navy); word-break: break-all; }
+  .small { font-size: 10pt; color: var(--sub); line-height: 1.6; }
+  .steps li { margin-bottom: 2mm; }
+  .worlds td:first-child { width: 22mm; text-align: center; font-family: "Dot", "IPAGothic"; }
+</style>
+</head>
+<body>
+
+<!-- 1 表紙 -->
+<section class="page cover">
+  <h1>ミスターポストマン</h1>
+  <div class="en">MISTER POSTMAN</div>
+  <img class="shot" src="img/title.png" alt="タイトル画面">
+  <div class="story">
+    空に浮かぶ「<b>ソラツギ諸島</b>」は、<b>ニジ灯台</b>の光でつながっていました。<br>
+    ある日、クモリ男爵が灯台の燃料「<b>ヒカリのかけら</b>」をうばい、島から色が消えてしまいます。
+    島をつなぐ光の橋も消え、手紙が届けられません。
+    <span class="q">「手紙を待っている人がいる。ぼくが届ける！」</span>
+  </div>
+  <div class="cast">
+    <div><img class="s" data-s="STAND" data-z="5"><br>ミスターポストマン</div>
+    <div><img class="s" data-s="POCCHI" data-z="5"><br>ポッチ（相棒）</div>
+    <div><img class="s" data-s="BARON" data-z="5"><br>クモリ男爵</div>
+  </div>
+  <div class="qrrow">
+    <img src="img/qr.png" alt="QRコード">
+    <div>
+      <div class="dot" style="color:var(--navy)">あそぶ場所（iPhone の Safari で開く）</div>
+      <div class="url">https://tmgalaxy330-byte.github.io/make-games/</div>
+      <div class="small">カメラで QR コードを読むと開けます。はじめての準備は次のページを見てね。</div>
+    </div>
+  </div>
+  <div class="foot"><span>MISTER POSTMAN — 説明書</span><span>1</span></div>
+</section>
+
+<!-- 2 はじめる前に -->
+<section class="page">
+  <h2>はじめる前に <small>iPhone の準備</small></h2>
+  <h3>1. ホーム画面に追加する（インターネットにつながっているときに）</h3>
+  <ol class="steps">
+    <li><b>Safari</b> で上のアドレスを開きます（QR コードを読んでも OK）。</li>
+    <li>画面下の <b>共有ボタン</b>（四角から上向きの矢印）をタップします。</li>
+    <li>メニューから「<b>ホーム画面に追加</b>」を選び、右上の「追加」をタップします。</li>
+    <li>ホーム画面にできた <b>ポストマンのアイコン</b> から起動します。</li>
+    <li>タイトル画面が出るまで待ちます。これで<b>ゲームが iPhone の中に保存</b>されます。</li>
+  </ol>
+  <h3>2. 飛行機の中で遊ぶとき</h3>
+  <ol class="steps">
+    <li>乗る前の日までに、上の「ホーム画面に追加」をすませて <b>1回起動</b>しておきます。</li>
+    <li><b>機内モードにしてから</b>アイコンを開き、ちゃんと動くか確かめておくと安心です。</li>
+    <li>機内ではインターネットなしで、最初から最後まで遊べます。</li>
+  </ol>
+  <div class="box warn"><span class="t">！ 注意</span>
+    iPhone は、長いあいだ開かなかったサイトのデータを消すことがあります。
+    <b>出発の前日にもう一度アイコンを開いて</b>おくと安心です。
+    もしオフラインで開けなかったら、インターネットにつながる場所で1回開き直してください。
+  </div>
+  <h3>3. 遊ぶときのポイント</h3>
+  <ul>
+    <li>画面は<b>横向き</b>で遊びます。縦にすると「横にしてね」と出ます。</li>
+    <li>音が出ないときは、iPhone の<b>消音スイッチ</b>（マナーモード）と音量を確かめてください。</li>
+    <li>記録（セーブ）は<b>自動</b>です。タイトル画面の <b>CONTINUE</b> で続きから遊べます。</li>
+    <li>記録はその iPhone だけに残ります。べつの iPhone には引きつげません。</li>
+    <li>ほかのアプリに切りかえると、ゲームは自動で一時停止します。</li>
+  </ul>
+  <div class="box" style="margin-top:4mm"><span class="t">クレジット</span>
+    <span class="small">ゲーム・絵・音楽：オリジナル作品<br>
+    フォント：DotGothic16（SIL Open Font License 1.1）／ この説明書の本文：IPA ゴシック（IPA フォントライセンス v1.0）</span>
+  </div>
+  <div class="foot"><span>MISTER POSTMAN — 説明書</span><span>2</span></div>
+</section>
+
+<!-- 3 ボタンと画面 -->
+<section class="page">
+  <h2>ボタンと画面の見かた</h2>
+  <div class="annot">
+    <img class="shot" src="img/play.png" alt="ゲーム画面">
+    <span class="num" style="left:6%;top:14%">1</span>
+    <span class="num" style="left:15.6%;top:14%">2</span>
+    <span class="num" style="left:25%;top:14%">3</span>
+    <span class="num" style="left:35%;top:14%">4</span>
+    <span class="num" style="left:43%;top:14%">5</span>
+    <span class="num" style="left:72%;top:14%">6</span>
+    <span class="num" style="left:82%;top:14%">7</span>
+    <span class="num" style="left:89.5%;top:14%">8</span>
+    <span class="num" style="left:96%;top:14%">9</span>
+    <span class="num b" style="left:15.5%;top:70%">A</span>
+    <span class="num b" style="left:81.5%;top:58%">B</span>
+    <span class="num b" style="left:98.2%;top:76%">C</span>
+    <span class="num b" style="left:71%;top:84%">D</span>
+  </div>
+  <div class="two" style="margin-top:4mm">
+    <div>
+      <h3 style="margin-top:0">ボタン</h3>
+      <table>
+        <tr><th><span class="num b">A</span>◀ ▶</th><td>左右に歩く。</td></tr>
+        <tr><th><span class="num b">B</span>DASH</th><td><b>押すたびに ON / OFF</b>。ON のあいだ速く走り、ジャンプも高く遠くなる。押しっぱなしにしなくてよい。</td></tr>
+        <tr><th><span class="num b">C</span>JUMP</th><td>ジャンプ。<b>長く押すほど高く</b>とぶ。</td></tr>
+        <tr><th><span class="num b">D</span>FIRE</th><td>光の玉を投げる。<b>ランタンを持っているときだけ</b>出る。</td></tr>
+      </table>
+      <p class="small">◀ と JUMP など、<b>2つ同時に押せます</b>。空中で反対向きを押すとブレーキがかかり、着地をあわせやすくなります。</p>
+    </div>
+    <div>
+      <h3 style="margin-top:0">画面の上</h3>
+      <table>
+        <tr><th><span class="num">1</span></th><td>ハート（体力）</td></tr>
+        <tr><th><span class="num">2</span></th><td>ハート切手の枚数</td></tr>
+        <tr><th><span class="num">3</span></th><td>のこり人数（ミスできる回数）</td></tr>
+        <tr><th><span class="num">4</span></th><td>このステージのヒカリのかけら（3つ）</td></tr>
+        <tr><th><span class="num">5</span></th><td>持っているアイテム</td></tr>
+        <tr><th><span class="num">6</span></th><td>のこり時間</td></tr>
+        <tr><th><span class="num">7</span></th><td>いまのステージ</td></tr>
+        <tr><th><span class="num">8</span></th><td>音の ON / OFF</td></tr>
+        <tr><th><span class="num">9</span></th><td>一時停止</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span>MISTER POSTMAN — 説明書</span><span>3</span></div>
+</section>
+
+<!-- 4 ルール -->
+<section class="page">
+  <h2>ルール</h2>
+  <h3>ゴールは「ポスト」</h3>
+  <p><img class="s" data-s="POST" data-z="3" style="float:right;margin:0 0 2mm 4mm">右へ進んで、ステージの最後にある<b>赤いポスト</b>にさわると配達完了（クリア）。
+  花火と虹でお祝いされます。各ワールドの最後には<b>ボス</b>が待っています。</p>
+  <p>ステージのとちゅうには<b>チェックポイント</b>があり、ミスしてもそこから始められます。</p>
+  <h3>体力とミス</h3>
+  <ul>
+    <li>体力は<b>ハート3つ</b>。敵に横からさわったり、トゲに当たったりすると減ります。</li>
+    <li>ハートが0になる、穴に落ちる、時間切れになると<b>ミス</b>。のこり人数が1つ減ります。</li>
+    <li>のこり人数が0のときにミスすると <b>GAME OVER</b>。RETRY でもう一度、MAP でマップにもどれます。クリアしたステージの記録は消えません。</li>
+    <li>ダメージを受けたあと<b>約1.5秒</b>は点めつして、敵に当たりません。</li>
+  </ul>
+  <h3>ダメージを受けたときの順番</h3>
+  <p>当たると、<b>上から順に1つだけ</b>なくなります。</p>
+  <table>
+    <tr><th>順番</th><th>持っているもの</th><th>当たったとき</th></tr>
+    <tr><td>1</td><td><img class="s" data-s="BIGBAG" data-z="2"> 大きな配達カバン</td><td>カバンがやぶれる（ほかは無事）</td></tr>
+    <tr><td>2</td><td><img class="s" data-s="BOOTS" data-z="2"> パワーアップ</td><td>パワーアップがなくなる（ハートは無事）</td></tr>
+    <tr><td>3</td><td>何も持っていない</td><td>ハートが1つ減る</td></tr>
+  </table>
+  <p class="small">例：カバンとバネぐつを両方持っていれば、2回当たってもハートは減りません。ただし<b>穴に落ちたら</b>何を持っていてもミスです。</p>
+  <h3>時間制限</h3>
+  <p>ステージには<b>のこり時間</b>があります。のこり <b>50秒</b>になると合図の音が鳴り、
+  <b>音楽が速くなります</b>。あわてずに、でも急いでポストへ！</p>
+  <h3>敵のたおし方</h3>
+  <p>多くの敵は<b>上からふむ</b>とたおせます。ふむときに JUMP を押していると、高くはね上がります。
+  トゲのある敵はふめないので、よけるか、ランタンの光の玉でたおします。</p>
+  <div class="foot"><span>MISTER POSTMAN — 説明書</span><span>4</span></div>
+</section>
+
+<!-- 5 アイテムとブロック -->
+<section class="page">
+  <h2>アイテムとブロック</h2>
+  <h3>集めもの・回復</h3>
+  <table>
+    <tr><td class="ic"><img class="s" data-s="STAMP" data-z="3"></td><td><b>ハート切手</b>：100枚集めると、のこり人数が1人ふえる。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="GEM" data-z="3"></td><td><b>ヒカリのかけら</b>：各ステージに3つかくれている。全部見つけられるかな？</td></tr>
+    <tr><td class="ic"><img class="s" data-s="LETTER_1UP" data-z="3"></td><td><b>はげましの手紙</b>：のこり人数が1人ふえる（1UP）。見えないブロックにかくれていることが多い。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="ONIGIRI" data-z="3"></td><td><b>おにぎり</b>：ハートが1つ回復する。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="SCARF" data-z="3"></td><td><b>ニジのスカーフ</b>：<b>約8秒間むてき</b>。さわるだけで敵をたおせる。終わる少し前から点めつする。穴に落ちるとミスなので注意。</td></tr>
+  </table>
+  <h3>パワーアップ（1つだけ持てる）</h3>
+  <table>
+    <tr><td class="ic"><img class="s" data-s="BOOTS" data-z="3"></td><td><b>バネぐつ</b>：空中でもう1回ジャンプできる（2段ジャンプ）。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="LANTERN" data-z="3"></td><td><b>ランタン</b>：FIRE ボタンで光の玉を投げて、敵をたおす。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="PLANE" data-z="3"></td><td><b>紙ひこうきマント</b>：空中で JUMP を<b>押し続ける</b>と、ゆっくり滑空できる。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="BIGBAG" data-z="3"></td><td><b>大きな配達カバン</b>：ダメージを<b>1回</b>ふせぐ。パワーアップとは<b>別に</b>持てる。</td></tr>
+  </table>
+  <p class="small">新しいパワーアップを取ると入れかわります。同じものをもう一度取ると、ハート切手5枚になります。</p>
+  <h3>ブロック（下から頭でたたく）</h3>
+  <table>
+    <tr><td class="ic"><img class="s" data-s="LETTERBLK" data-z="3"></td><td><b>手紙ブロック</b>：中身が1つ出る。中身はステージごとに決まっていて、毎回同じ。パワーアップ入りは少しキラッと光る。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="PARCEL" data-z="3"></td><td><b>小包ブロック</b>：たたくたびにハート切手が出る（10回まで）。</td></tr>
+    <tr><td class="ic dot" style="font-size:16pt;color:#e0b000">✦</td><td><b>かくしブロック</b>：ふだんは見えない。何もないところで下からジャンプすると出てくることがある。はげましの手紙が入っていることが多い。</td></tr>
+  </table>
+  <div class="foot"><span>MISTER POSTMAN — 説明書</span><span>5</span></div>
+</section>
+
+<!-- 6 敵としかけ -->
+<section class="page">
+  <h2>敵としかけ</h2>
+  <h3>ドンヨリ団（敵）</h3>
+  <table>
+    <tr><td class="ic"><img class="s" data-s="MOYAN" data-z="3"></td><td><b>モヤン</b>：歩くだけの灰色の雲。<b>ふめる</b>。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="TOGE" data-z="3"></td><td><b>トゲボウシ</b>：頭にトゲ。<b>ふめない</b>。よけるか光の玉で。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="PATA" data-z="3"></td><td><b>パタクモ</b>：ふわふわ飛ぶ。<b>ふめる</b>。空中で止まっているパタクモは、ふむと消えるので、<b>次々にふんで穴をわたる</b>ことができる。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="MOGU" data-z="3"></td><td><b>スナモグラ</b>：砂から出たりもぐったりする。出ているときに<b>ふめる</b>。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="YUKI" data-z="3"></td><td><b>ユキコロ</b>：雪原を転がってくる。<b>ふめる</b>。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="TSURARA" data-z="3"></td><td><b>つらら</b>：真下に近づくと、ぷるぷるしてから落ちてくる。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="SAKANA" data-z="3"></td><td><b>サカナ</b>：水の中を左右に泳ぐ。<b>ふめる</b>。</td></tr>
+    <tr><td class="ic"><img class="s" data-s="UNI" data-z="3"></td><td><b>ウニ</b>：動かないが、<b>ふめない</b>。</td></tr>
+  </table>
+  <h3>しかけ（ワールド4から多くなる）</h3>
+  <table>
+    <tr><th>トゲの柱</th><td>地面から出たり引っこんだりする。<b>引っこんだ瞬間</b>に通りぬける。</td></tr>
+    <tr><th>電気の門</th><td>電気が流れたり止まったりする。止まっているあいだに通る。</td></tr>
+    <tr><th>くずれる足場</th><td>乗ると少しして落ちる。止まらずに進もう。しばらくすると元にもどる。</td></tr>
+    <tr><th>動く足場</th><td>左右・上下・円をえがいて動く。動きを見てから乗ろう。</td></tr>
+    <tr><th>すべる氷・流砂</th><td>氷はすべる、流砂はしずむ。ジャンプで乗りきろう。</td></tr>
+    <tr><th>ベルトコンベア</th><td>乗っていると運ばれる。</td></tr>
+    <tr><th>扉・雷・強い風</th><td>扉はときどき開く。雷は落ちる前に雲が光る。風は強く吹かないときを待つ。</td></tr>
+  </table>
+  <p class="small">どのしかけにも、<b>かならず安全に通れるタイミング</b>があります。むずかしいと思ったら、立ち止まって動きをよく見てみよう。</p>
+  <div class="foot"><span>MISTER POSTMAN — 説明書</span><span>6</span></div>
+</section>
+
+<!-- 7 ワールドとこつ -->
+<section class="page">
+  <h2>ワールドと攻略のこつ</h2>
+  <div class="two">
+    <img class="shot" src="img/map.png" alt="マップ画面">
+    <img class="shot" src="img/play4.png" alt="ワールド4の画面">
+  </div>
+  <p class="small" style="margin-top:2mm">左：マップ画面。◀ ▶ でワールドを選び、PLAY で出発。 右：ワールド4。トゲの柱やくずれる足場が出てきます。</p>
+  <h3>ワールド</h3>
+  <table class="worlds">
+    <tr><td>1</td><td><b>はじまりの草原島</b>　ボス：大ガエル ゲコドン</td></tr>
+    <tr><td>2</td><td><b>カラカラ砂丘島</b>　ボス：砂ムカデ ザラザラ</td></tr>
+    <tr><td>3</td><td><b>ツララ雪原島</b>　ボス：雪だるま将軍</td></tr>
+    <tr><td>4</td><td><b>シズク海底島</b>　ボス：大ダコ ヌルリン（水の中では JUMP で泳ぐ）</td></tr>
+    <tr><td>5</td><td><b>クモリ城</b>　ボス：クモリ男爵</td></tr>
+    <tr><td>？</td><td>……クモリ男爵をたおしたあと、<b>差出人のない手紙</b>が届くかもしれない。</td></tr>
+  </table>
+  <p class="small">ワールド1〜3はやさしめ。ワールド4からは、タイミングをあわせる場所が増えて少しむずかしくなります。ステージはクリアすると色がもどります。</p>
+  <h3>攻略のこつ</h3>
+  <ul>
+    <li><b>ダッシュは近道用</b>。ダッシュしなくても、全部のステージをクリアできます。</li>
+    <li><b>パタクモの橋</b>は DASH を OFF にして、1ぴきずつ「ふむ → JUMP」とリズムよく。</li>
+    <li>落ちそうなときは、空中で<b>反対向き</b>を押してブレーキ。</li>
+    <li>手紙ブロックの中身はいつも同じ。<b>カバンやスカーフのある場所を覚える</b>と楽になります。</li>
+    <li>ボスは動きにくせがあります。まずはよけながら<b>よく見る</b>のが近道。</li>
+  </ul>
+  <div class="foot"><span>MISTER POSTMAN — 説明書</span><span>7</span></div>
+</section>
+
+<script src="../../game/sprites.js"></script>
+<script>
+  // ゲーム本体のドット絵データから、説明書用の絵を作る（にじまないように拡大）
+  document.querySelectorAll('img.s').forEach(img => {
+    const src = window.SPR[img.dataset.s];
+    if (!src) { img.alt = '?'; return; }
+    const z = Number(img.dataset.z || 3);
+    const c = document.createElement('canvas');
+    c.width = src.width * z; c.height = src.height * z;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.drawImage(src, 0, 0, c.width, c.height);
+    img.src = c.toDataURL();
+    img.style.width = (src.width * z * 0.75) + 'px';
+  });
+  window.MANUAL_READY = true;
+</script>
+</body>
+</html>

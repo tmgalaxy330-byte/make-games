@@ -363,3 +363,15 @@ body.cutscene #pad, body.cutscene #hud, body.menu #pad, body.menu #hud { opacity
   animation: comeback 10s ease-in-out forwards; }
 @keyframes comeback { 0% { opacity: 0; } 35% { opacity: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .comeback-text { animation-duration: 10s; } }
+
+/* スマホ横向き（iPhone など）で HUD の文字が折り返さないように詰める */
+.pill { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 960px) {
+  #hud { gap: 5px; top: 6px; }
+  .pill { height: 30px; padding: 0 8px; gap: 4px; font-size: 15px; }
+  .pill small { font-size: 10px; letter-spacing: 0; }
+  .pill.icon { width: 40px; }
+  #stamp-icon { width: 17px; height: 17px; }
+  #gem-icons { width: 52px; height: 11px; }
+  .heart { transform: scale(.85); margin: 0 -1px; }
+}

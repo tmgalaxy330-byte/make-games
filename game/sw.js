@@ -1,7 +1,7 @@
 // ミスターポストマン：オフラインで遊べるようにするしくみ（Service Worker）
 // ゲームのファイルを最初にまとめて保存し、次からは保存したものを使う。
 // ファイルを更新したら VERSION を上げる（古い保存は自動で消える）。
-const VERSION = 'mp-v1';
+const VERSION = 'mp-v2';
 const FILES = [
   './', 'index.html', 'style.css', 'sprites.js', 'audio.js', 'main.js',
   'manifest.webmanifest', 'fonts/DotGothic16-subset.woff2',
