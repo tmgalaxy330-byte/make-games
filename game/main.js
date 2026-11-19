@@ -1182,7 +1182,7 @@
     state = 'play';
     showActors = true;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
-    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen')]) sc.hidden = true;
+    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen'), document.getElementById('comeback-screen')]) sc.hidden = true;
     document.body.classList.remove('cutscene', 'menu');
     setSat(save.cleared[STAGES[stageIndex].id] ? 1 : 0.35, false);
     run.time = levelDef.time || (STAGES[stageIndex].boss ? 150 : 200);
@@ -3041,7 +3041,7 @@
   drawFace('map-hero', SPR.STAND);
 
   function showMenuScene(el) {
-    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen')]) sc.hidden = sc !== el;
+    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen'), document.getElementById('comeback-screen')]) sc.hidden = sc !== el;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
     document.body.classList.add('menu');
     document.body.classList.remove('cutscene');
@@ -3319,7 +3319,7 @@
     // 夜の時の灯台：トキモリと黒い手紙。2つめのセリフで影があらわれる
     blackT = 0; blackDone = null;
     const g = LEVEL_DEFS['7-3'].goal * TILE;
-    playDialog(POSTCREDIT, () => startBlack(2.2, () => { blackT = 0; blackDone = null; enterTitle(); }), '7-3', 'none', {
+    playDialog(POSTCREDIT, () => startBlack(2.2, showComeback), '7-3', 'none', {
       noPlayer: true, dark: true,
       extras: [
         { img: 'TOKIMORI', x: g + 5 * TILE, y: 10 * TILE, flip: true },
@@ -3332,6 +3332,18 @@
     CHECKPOINT = null;
   }
   tap('btn-credits-skip', () => { if (state === 'credits') { creditT = 999; } });
+
+  // さいごの さいご：黒い画面に、ゆっくり文字が出て、ゆっくり消える
+  const COMEBACK_SEC = 10;
+  function showComeback() {
+    blackDone = null; blackT = 1;
+    state = 'comeback'; showActors = false;
+    const el = document.getElementById('comeback-screen');
+    showMenuScene(el);
+    const txt = el.querySelector('.comeback-text');
+    txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = '';
+    setTimeout(() => { if (state === 'comeback') { blackT = 0; enterTitle(); } }, COMEBACK_SEC * 1000 + 800);
+  }
 
   // ---- 幕の終わり（第一幕おわり → 予告 → 第二幕へ ／ THE END）
   const actScreen = document.getElementById('act-screen');

@@ -347,3 +347,13 @@ body.cutscene #pad, body.cutscene #hud, body.menu #pad, body.menu #hud { opacity
 #credit-name { position: absolute; left: 0; right: 0; top: 26%; text-align: center; font-family: var(--pixel);
   font-size: 30px; letter-spacing: .12em; color: #fff; opacity: 0;
   text-shadow: 0 3px 0 #281c34, 3px 0 0 #281c34, -3px 0 0 #281c34, 0 -3px 0 #281c34; }
+
+/* さいごの文字：黒い画面で、ゆっくり出て、ゆっくり消える（全部で10秒） */
+#comeback-screen { display: flex; align-items: center; justify-content: center; background: #000;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); }
+#comeback-screen[hidden] { display: none; }
+.comeback-text { margin: 0; font-family: var(--pixel); font-size: 34px; letter-spacing: .14em; text-align: center;
+  color: #f4f0e8; text-shadow: 0 0 12px rgba(255,236,150,.35); opacity: 0;
+  animation: comeback 10s ease-in-out forwards; }
+@keyframes comeback { 0% { opacity: 0; } 35% { opacity: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .comeback-text { animation-duration: 10s; } }
