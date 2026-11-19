@@ -112,6 +112,21 @@
       // 天井（0行目から row 行目まで岩）
       ceiling: (x0, x1, row) => { for (let x = x0; x <= x1; x++) for (let y = 0; y <= row; y++) set(x, y, '#'); },
       hang: (x, row0, row1) => { for (let y = row0; y <= row1; y++) set(x, y, '#'); },
+      // ベルトコンベア：乗っていると dir の向きに運ばれる（dir = -1 左 / 1 右）
+      conveyor: (x0, x1, row, dir) => { for (let x = x0; x <= x1; x++) set(x, row, dir < 0 ? '<' : '>'); },
+      // 開け閉めする扉：row0〜row1 をふさぐ。open 秒だけ開く
+      door: (x, row0, row1, period = 3, open = 1.4, phase = 0) => {
+        traps.push({ type: 'door', x, row0, row1, period, open, phase, shut: true });
+        for (let y = row0; y <= row1; y++) set(x, y, 'D');
+      },
+      // 雷：空の雲から、x の列に雷が落ちる（落ちる前に雲が光る）
+      bolt: (x, period = 3, phase = 0) => traps.push({ type: 'bolt', x, period, phase, live: false, warn: false }),
+      // 強い風：x0〜x1 で、ときどき force の強さでおし流す（マイナスは左向き）
+      wind: (x0, x1, period = 4, on = 1.8, force = -70, phase = 0) => traps.push({ type: 'wind', x0, x1, period, on, force, phase, live: false }),
+      // 円をえがいて回る足場：中心（マス）、半径（マス）、速さ
+      cmover: (cx, cyRow, radius, speed, phase = 0, wTiles = 2) => movers.push({
+        x: 0, y: 0, w: wTiles * TILE, h: 6, cx: cx * TILE, cy: cyRow * TILE, r: radius * TILE, speed, t: phase, dx: 0, dy: 0, axis: 'circle', first: true,
+      }),
       wallEnd: () => { for (let y = 0; y < 10; y++) set(LEVEL_W - 1, y, '#'); },
       // 氷：row の行に氷ブロックをならべる。iceGround は地面の表面を氷にする
       ice: (x0, x1, row) => { for (let x = x0; x <= x1; x++) set(x, row, 'I'); },
@@ -120,13 +135,16 @@
       quicksand: (x0, x1) => { for (let x = x0; x <= x1; x++) set(x, 10, 'Q'); },
       // 敵の大きさは種類ごと（つららは天井からぶら下がる）
       boss: (type) => {
-        const size = { geko: [26, 24], zara: [16, 12], snow: [20, 23], tako: [26, 22] }[type];
+        const size = { geko: [26, 24], zara: [16, 12], snow: [20, 23], tako: [26, 22], baron: [18, 30], gear: [20, 21], toki: [18, 21] }[type];
         boss = {
           type, x: 20 * TILE, y: 10 * TILE - size[1], w: size[0], h: size[1], vx: 0, vy: 0, hp: 3, maxHp: 3,
           mode: type === 'zara' ? 'crawl' : 'idle', t: 0, hurtT: 0, face: -1, onGround: true, dead: false, deadT: 0,
           squash: 0, throws: 0, dir: -1, hist: [],
         };
         if (type === 'zara') for (let i = 0; i < 70; i++) boss.hist.push({ x: boss.x, y: boss.y });
+        if (type === 'toki') { boss.hp = boss.maxHp = 4; }
+        if (type === 'baron') { boss.y = 4 * TILE; boss.homeY = 4 * TILE; boss.alpha = 1; }
+        boss.alpha = 1;
       },
     };
   }
@@ -150,6 +168,21 @@
     deep: { sky: [[8, 36, 86], [28, 92, 150]], mtn: ['#1c4a7a', '#163e68'], hill: ['#1a5a6a', '#2a7a8a'], tiles: 'rock', noSun: true, water: true, song: 'deep' },
     reef: { sky: [[236, 136, 112], [255, 212, 160]], mtn: ['#5a9ac0', '#4a88b0'], hill: ['#3a8ab8', '#6ab0d8'], tiles: 'wetsand', lowSun: true, song: 'sea' },
     tide: { sky: [[36, 56, 98], [88, 120, 162]], mtn: ['#2c4c74', '#22405f'], hill: ['#2a6a8a', '#4a8aa8'], tiles: 'rock', noSun: true, song: 'boss' },
+    // ワールド5：クモリ城（第一幕さいご）
+    castle: { sky: [[52, 40, 84], [128, 104, 150]], mtn: ['#4a3e6a', '#3a3058'], hill: ['#5a5070', '#76698e'], tiles: 'stone', noSun: true, castle: true, song: 'castle' },
+    castleIn: { sky: [[30, 22, 50], [70, 54, 96]], mtn: ['#3a2e54', '#2c2244'], hill: ['#44385c', '#5a4c74'], tiles: 'stone', noSun: true, castle: true, song: 'castle' },
+    castleTop: { sky: [[64, 52, 110], [196, 150, 190]], mtn: ['#5a4c80', '#483c6a'], hill: ['#6a5c84', '#8a7ca4'], tiles: 'stone', lowSun: true, castle: true, song: 'castle' },
+    thunder: { sky: [[28, 22, 46], [84, 70, 110]], mtn: ['#3a3054', '#2c2444'], hill: ['#40365a', '#544a70'], tiles: 'stone', noSun: true, song: 'final' },
+    // ワールド6：歯車の時計島（第二幕）
+    clock: { sky: [[214, 170, 110], [250, 224, 170]], mtn: ['#c49a62', '#a87e4c'], hill: ['#b48a54', '#d0a870'], tiles: 'brass', gears: true, song: 'clock' },
+    clockIn: { sky: [[90, 64, 40], [150, 112, 70]], mtn: ['#6e4e30', '#5a3e24'], hill: ['#7a5a38', '#946e48'], tiles: 'brass', gears: true, noSun: true, song: 'clock' },
+    clockDusk: { sky: [[150, 90, 110], [250, 186, 130]], mtn: ['#9a6a70', '#80545e'], hill: ['#a07a58', '#c09a70'], tiles: 'brass', gears: true, lowSun: true, song: 'clock' },
+    clockBoss: { sky: [[70, 50, 34], [130, 96, 60]], mtn: ['#5a4028', '#48321e'], hill: ['#6a4c30', '#80603e'], tiles: 'brass', gears: true, noSun: true, song: 'boss' },
+    // ワールド7：時の灯台（第二幕さいご）
+    time: { sky: [[40, 30, 90], [110, 90, 170]], mtn: ['#3a3078', '#2e2664'], hill: ['#4a3e8a', '#6a5aaa'], tiles: 'time', noSun: true, stars: true, song: 'time' },
+    timeIn: { sky: [[16, 12, 44], [56, 44, 110]], mtn: ['#241c54', '#1c1644'], hill: ['#2e2462', '#40347e'], tiles: 'time', noSun: true, stars: true, song: 'time' },
+    timeTop: { sky: [[30, 40, 110], [200, 170, 230]], mtn: ['#3a3a88', '#2e2e70'], hill: ['#5a4e9a', '#7a6eba'], tiles: 'time', lowSun: true, stars: true, song: 'time' },
+    timeBoss: { sky: [[10, 8, 30], [50, 36, 90]], mtn: ['#1c1640', '#141030'], hill: ['#261e50', '#342a66'], tiles: 'time', noSun: true, stars: true, song: 'final' },
     blizzard: { sky: [[90, 100, 142], [172, 182, 212]], mtn: ['#7a84aa', '#646e94'], hill: ['#c0cce4', '#dce4f4'], tiles: 'snow', snowfall: true, noSun: true, song: 'boss' },
   };
 
@@ -512,7 +545,7 @@
       B.zap(86, 4, 9, 2.2, 0.9, 0); B.zap(89, 4, 9, 2.2, 0.9, 1.1);
       B.piston(94, 2, 2.0, 0); B.piston(97, 2, 2.0, 0.4); B.piston(100, 2, 2.0, 0.8);
       B.block(103, 6, 'scarf');
-      B.vmover(105, 3, 2, 4, 1.2);
+      B.vmover(105, 3, 2, 5, 1.2);
       for (let x = 107; x <= 111; x++) B.pillar(x, 5);
       B.gem(110, 2, 1);
       B.crumble(114, 115, 9); B.crumble(117, 118, 8); B.crumble(120, 121, 9);
@@ -530,6 +563,259 @@
       for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
       B.plank(5, 7, 6); B.plank(20, 22, 6);
       B.boss('tako');
+    } },
+
+    // ================= ワールド5：クモリ城（第一幕のさいご） =================
+    '5-1': { w: 170, theme: 'castle', time: 280, checkpoint: 60, goal: 156, build(B) {
+      B.ground(0, 22); B.stamps(5, 8, 8);
+      B.block(10, 6); B.block(11, 6, 'boots'); B.block(12, 6);
+      B.enemy('moyan', 16); B.enemy('toge', 19);
+      B.ground(23, 40);
+      B.bolt(26, 3.0, 0); B.bolt(30, 3.0, 1.0); B.bolt(34, 3.0, 2.0);       // 雷：雲が光ったら止まる
+      B.door(38, 6, 9, 3.2, 1.5, 0);                                     // 扉：開いたらすばやく通る
+      B.enemy('hover', 43.5, 8); B.enemy('hover', 47, 8); B.enemy('hover', 50.5, 8);
+      B.ground(54, 100);
+      B.enemy('pata', 64, 6);
+      B.crumble(66, 70, 7); B.gem(68, 4, 0);
+      B.piston(74, 2, 2.0, 0); B.piston(76, 2, 2.0, 0.3); B.piston(78, 2, 2.0, 0.6);
+      B.door(83, 5, 9, 2.8, 1.2, 0.5);
+      B.bolt(88, 2.6, 0.4); B.enemy('toge', 90); B.bolt(92, 2.6, 1.7);
+      B.block(95, 6, 'onigiri');
+      B.vmover(102, 5, 2, 3, 1.3, 0); B.vmover(106, 5, 2, 3, 1.3, 1.5);
+      B.ground(110, LEVEL_W - 1);
+      B.wind(116, 128, 4.0, 1.6, -80, 0);                               // 向かい風の中のトゲ
+      B.piston(120, 2, 2.4, 0); B.piston(124, 2, 2.4, 1.2);
+      B.plank(120, 124, 6); B.gem(122, 3, 1);
+      B.enemy('moyan', 132);
+      B.door(137, 5, 9, 3.0, 1.3, 0);
+      for (let i = 0; i < 4; i++) B.pillar(141 + i, i + 1);
+      B.gem(144, 3, 2);
+      B.bolt(150, 2.4, 0);
+      B.wallEnd();
+    } },
+    '5-2': { w: 170, theme: 'castleIn', time: 280, checkpoint: 82, goal: 156, build(B) {
+      B.ceiling(0, LEVEL_W - 1, 1);
+      B.ground(0, 24); B.stamps(4, 7, 8);
+      B.block(9, 6, 'lantern');
+      B.conveyor(14, 22, 10, -1); B.enemy('moyan', 18);                    // ベルトコンベア（左へ）
+      B.cmover(30, 7, 2.5, 1.4, 0, 3);                                   // 回る足場
+      B.ground(35, 70);
+      B.door(40, 5, 9, 2.6, 1.2, 0);
+      B.zap(45, 5, 9, 2.4, 1.0, 0.6);
+      B.conveyor(48, 56, 10, 1); B.piston(52, 2, 2.2, 0); B.piston(55, 2, 2.2, 0.6);
+      B.enemy('toge', 60); B.enemy('moyan', 63);
+      B.plank(64, 68, 6); B.gem(66, 3, 0);
+      B.crumble(72, 73, 9); B.crumble(76, 77, 8);
+      B.ground(80, 120);
+      B.zap(86, 4, 9, 2.4, 1.0, 0); B.zap(89, 4, 9, 2.4, 1.0, 0.8); B.zap(92, 4, 9, 2.4, 1.0, 1.6);
+      B.conveyor(95, 105, 10, -1); B.piston(98, 2, 2.0, 0); B.piston(101, 2, 2.0, 0.5);
+      B.door(108, 5, 9, 3.0, 1.2, 0.3);
+      B.block(112, 6, 'oneup', 'H');
+      B.plank(114, 118, 6); B.gem(116, 3, 1);
+      B.cmover(126.5, 7, 3, 1.2, 0, 3);
+      B.ground(133, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(136 + i, i + 1);
+      for (let x = 140; x <= 143; x++) B.pillar(x, 4);
+      B.gem(142, 3, 2);
+      B.door(147, 6, 9, 2.6, 1.1, 0);
+      B.zap(151, 5, 9, 2.2, 1.0, 0.5);
+      B.wallEnd();
+    } },
+    '5-3': { w: 170, theme: 'castleTop', time: 280, checkpoint: 76, goal: 156, lighthouse: true, build(B) {
+      B.ground(0, 20);
+      B.block(8, 6, 'plane'); B.enemy('moyan', 13);
+      B.ground(21, 25); B.crumble(26, 33, 10); B.ground(34, 60);
+      B.wind(21, 40, 3.6, 1.6, -90, 0);                                  // 向かい風＋くずれる橋
+      B.bolt(38, 2.6, 0); B.bolt(42, 2.6, 0.9); B.bolt(46, 2.6, 1.8);
+      B.enemy('toge', 50);
+      B.piston(54, 2, 1.8, 0); B.piston(56, 2, 1.8, 0.5);
+      B.enemy('hover', 63, 8, { sway: 0.35 }); B.enemy('hover', 66.5, 8, { sway: 0.35 }); B.enemy('hover', 70, 8, { sway: 0.35 });
+      B.ground(74, 112);
+      B.door(80, 5, 9, 3.0, 1.2, 0);
+      B.conveyor(84, 92, 10, -1);
+      B.zap(95, 4, 9, 2.2, 0.9, 0); B.zap(98, 4, 9, 2.2, 0.9, 1.1);
+      B.block(101, 6, 'scarf');
+      B.vmover(104, 3, 2, 5, 1.2);
+      for (let x = 106; x <= 110; x++) B.pillar(x, 5);
+      B.gem(108, 2, 1);
+      B.crumble(114, 115, 9); B.crumble(117, 118, 8); B.crumble(120, 121, 9);
+      B.ground(123, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(126 + i, i + 1);
+      B.gem(129, 3, 2);
+      B.bolt(134, 2.2, 0); B.enemy('moyan', 136); B.bolt(138, 2.2, 1.1);
+      B.wind(140, 150, 3.0, 1.4, -90, 0.5);
+      B.wallEnd();
+    } },
+    '5-B': { w: 28, theme: 'thunder', time: 180, checkpoint: null, goal: null, build(B) {
+      B.ground(0, 27);
+      for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
+      B.plank(5, 7, 6); B.plank(20, 22, 6);
+      B.boss('baron');
+    } },
+
+    // ================= ワールド6：歯車の時計島（第二幕） =================
+    '6-1': { w: 170, theme: 'clock', time: 300, checkpoint: 80, goal: 156, build(B) {
+      B.ground(0, 20); B.stamps(4, 7, 8);
+      B.block(9, 6); B.block(10, 6, 'boots'); B.block(11, 6);
+      B.enemy('moyan', 15); B.enemy('toge', 18);
+      B.cmover(26.5, 7, 3, 1.3, 0, 3);
+      B.ground(33, 64);
+      B.conveyor(36, 46, 10, 1); B.piston(40, 2, 2.0, 0); B.piston(43, 2, 2.0, 0.5);
+      B.plank(42, 46, 6); B.gem(44, 3, 0);
+      B.door(50, 5, 9, 2.6, 1.0, 0);
+      B.enemy('moyan', 55);
+      B.zap(59, 4, 9, 2.2, 0.9, 0.4);
+      B.enemy('hover', 67.5, 8); B.enemy('hover', 71, 8); B.enemy('hover', 74.5, 8);
+      B.ground(78, 118);
+      B.door(86, 5, 9, 2.6, 1.0, 0); B.door(90, 5, 9, 2.6, 1.0, 1.3);
+      B.conveyor(93, 103, 10, -1);
+      B.piston(96, 2, 1.8, 0); B.piston(99, 2, 1.8, 0.3); B.piston(102, 2, 1.8, 0.6);
+      B.block(106, 6, 'onigiri');
+      B.vmover(110, 3, 2, 5, 1.4);
+      for (let x = 112; x <= 116; x++) B.pillar(x, 5);
+      B.gem(114, 2, 1);
+      B.cmover(122, 7, 2, 1.5, 0, 2); B.cmover(127.5, 7, 2, 1.5, Math.PI / 1.5, 2);
+      B.ground(131, LEVEL_W - 1);
+      B.pillar(136, 4); B.pillar(135, 2); B.gem(136, 3, 2);
+      B.zap(142, 4, 9, 2.0, 0.8, 0); B.zap(145, 4, 9, 2.0, 0.8, 1.0);
+      B.door(150, 5, 9, 2.4, 1.0, 0.2);
+      B.wallEnd();
+    } },
+    '6-2': { w: 170, theme: 'clockIn', time: 300, checkpoint: 83, goal: 156, build(B) {
+      B.ceiling(0, LEVEL_W - 1, 1);
+      B.ground(0, 22);
+      B.block(9, 6, 'lantern');
+      B.conveyor(13, 21, 10, -1); B.enemy('moyan', 18);
+      B.crumble(24, 25, 9); B.crumble(27, 28, 8); B.crumble(30, 31, 9);
+      B.ground(34, 66);
+      B.door(38, 4, 9, 2.4, 1.0, 0); B.door(42, 4, 9, 2.4, 1.0, 1.2);
+      B.piston(46, 2, 1.6, 0); B.piston(48, 2, 1.6, 0.27); B.piston(50, 2, 1.6, 0.54);
+      B.plank(45, 51, 6); B.gem(48, 3, 0);
+      B.conveyor(53, 62, 10, 1);
+      B.zap(58, 4, 9, 2.0, 0.8, 0.3);
+      B.cmover(70.5, 6, 2, 1.3, 0, 3); B.cmover(76.5, 6, 2, 1.3, Math.PI, 3);
+      B.ground(81, 120);
+      B.wind(86, 100, 3.2, 1.4, -80, 0);
+      B.piston(90, 2, 2.2, 0); B.piston(94, 2, 2.2, 1.1);
+      B.enemy('toge', 97);
+      B.block(103, 6, 'scarf');
+      B.door(107, 4, 9, 2.6, 1.0, 0.5);
+      B.vmover(111, 3, 2, 5, 1.3);
+      for (let x = 113; x <= 117; x++) B.pillar(x, 5);
+      B.gem(115, 2, 1);
+      B.enemy('hover', 123.5, 8, { sway: 0.4 }); B.enemy('hover', 127, 8, { sway: 0.4 }); B.enemy('hover', 130.5, 8, { sway: 0.4 });
+      B.ground(134, LEVEL_W - 1);
+      B.zap(139, 4, 9, 1.8, 0.7, 0); B.zap(142, 4, 9, 1.8, 0.7, 0.6); B.zap(145, 4, 9, 1.8, 0.7, 1.2);
+      B.pillar(149, 2); B.pillar(150, 4); B.gem(150, 3, 2);
+      B.wallEnd();
+    } },
+    '6-3': { w: 170, theme: 'clockDusk', time: 300, checkpoint: 79, goal: 156, lighthouse: true, build(B) {
+      B.ground(0, 18);
+      B.block(8, 6, 'plane'); B.enemy('moyan', 13);
+      B.vmover(20, 5, 2, 3, 1.5, 0); B.vmover(24, 5, 2, 3, 1.5, 1.6);
+      B.ground(29, 62);
+      B.conveyor(32, 40, 10, -1); B.piston(34, 2, 1.8, 0); B.piston(37, 2, 1.8, 0.6);
+      B.door(44, 4, 9, 2.4, 1.0, 0);
+      B.zap(48, 4, 9, 2.0, 0.8, 0.5);
+      B.crumble(52, 57, 7); B.gem(54, 4, 0);
+      B.cmover(66.5, 7, 2.5, 1.5, 0, 3); B.cmover(73, 7, 2.5, 1.5, Math.PI, 3);
+      B.ground(78, 116);
+      B.door(84, 4, 9, 2.0, 0.9, 0); B.door(87, 4, 9, 2.0, 0.9, 1.0);
+      B.wind(90, 104, 3.0, 1.4, -90, 0.3);
+      B.piston(93, 2, 1.6, 0); B.piston(96, 2, 1.6, 0.2); B.piston(99, 2, 1.6, 0.4); B.piston(102, 2, 1.6, 0.6);
+      B.block(106, 6, 'oneup', 'H');
+      B.vmover(108, 3, 2, 5, 1.3);
+      for (let x = 110; x <= 114; x++) B.pillar(x, 5);
+      B.gem(112, 2, 1);
+      B.crumble(118, 119, 9); B.crumble(121, 122, 8); B.crumble(124, 125, 9);
+      B.ground(128, LEVEL_W - 1);
+      for (let i = 0; i < 4; i++) B.pillar(131 + i, i + 1);
+      B.gem(134, 3, 2);
+      B.zap(140, 4, 9, 1.8, 0.8, 0); B.door(144, 4, 9, 2.2, 0.9, 0.4);
+      B.wallEnd();
+    } },
+    '6-B': { w: 28, theme: 'clockBoss', time: 180, checkpoint: null, goal: null, build(B) {
+      B.ground(0, 27);
+      for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
+      B.plank(5, 7, 6); B.plank(20, 22, 6);
+      B.boss('gear');
+    } },
+
+    // ================= ワールド7：時の灯台（第二幕のさいご） =================
+    '7-1': { w: 170, theme: 'time', time: 300, checkpoint: 82, goal: 156, build(B) {
+      B.ground(0, 18); B.stamps(4, 7, 8);
+      B.block(9, 6, 'boots'); B.enemy('moyan', 14);
+      B.enemy('hover', 21.5, 8, { sway: 0.4 }); B.enemy('hover', 25, 8, { sway: 0.4 }); B.enemy('hover', 28.5, 8, { sway: 0.4 });
+      B.ground(32, 66);
+      B.bolt(36, 2.0, 0); B.bolt(39, 2.0, 0.6); B.bolt(42, 2.0, 1.2);
+      B.door(46, 4, 9, 2.2, 0.9, 0);
+      B.conveyor(49, 58, 10, 1); B.piston(52, 2, 1.6, 0); B.piston(55, 2, 1.6, 0.4);
+      B.plank(53, 57, 6); B.gem(55, 3, 0);
+      B.zap(62, 4, 9, 1.8, 0.7, 0.3);
+      B.cmover(70, 6, 2, 1.5, 0, 3); B.cmover(75.5, 6, 2, 1.5, Math.PI, 3);
+      B.ground(80, 118);
+      B.wind(86, 100, 2.8, 1.4, -100, 0);
+      B.bolt(89, 2.4, 0.3); B.bolt(95, 2.4, 1.5);
+      B.crumble(102, 106, 7); B.gem(104, 4, 1);
+      B.door(110, 4, 9, 2.0, 0.9, 0); B.door(113, 4, 9, 2.0, 0.9, 1.0);
+      B.crumble(120, 121, 9); B.crumble(123, 124, 8); B.crumble(126, 127, 9);
+      B.ground(130, LEVEL_W - 1);
+      B.piston(135, 2, 1.4, 0); B.piston(137, 2, 1.4, 0.2); B.piston(139, 2, 1.4, 0.4); B.piston(141, 2, 1.4, 0.6);
+      B.zap(146, 4, 9, 1.8, 0.7, 0);
+      B.pillar(149, 2); B.pillar(150, 4); B.gem(150, 3, 2);
+      B.wallEnd();
+    } },
+    '7-2': { w: 170, theme: 'timeIn', time: 300, checkpoint: 86, goal: 156, build(B) {
+      B.ceiling(0, LEVEL_W - 1, 1);
+      B.ground(0, 20);
+      B.block(8, 6, 'bag');
+      B.cmover(27.5, 6, 3, 1.1, 0, 3);
+      B.ground(33, 70);
+      B.zap(38, 4, 9, 1.8, 0.7, 0); B.zap(41, 4, 9, 1.8, 0.7, 0.6); B.zap(44, 4, 9, 1.8, 0.7, 1.2);
+      B.conveyor(47, 60, 10, -1);
+      B.piston(50, 2, 1.6, 0); B.piston(53, 2, 1.6, 0.3); B.piston(56, 2, 1.6, 0.6); B.piston(59, 2, 1.6, 0.9);
+      B.plank(50, 56, 6); B.gem(53, 3, 0);
+      B.door(64, 4, 9, 2.2, 0.9, 0.4);
+      B.enemy('hover', 73.5, 8, { sway: 0.45 }); B.enemy('hover', 77, 8, { sway: 0.45 }); B.enemy('hover', 80.5, 8, { sway: 0.45 });
+      B.ground(84, 120);
+      B.door(90, 4, 9, 2.4, 1.0, 0); B.door(93, 4, 9, 2.4, 1.0, 0.8); B.door(96, 4, 9, 2.4, 1.0, 1.6);
+      B.wind(99, 112, 3.0, 1.4, -90, 0);
+      B.crumble(103, 108, 7); B.gem(105, 4, 1);
+      B.block(114, 6, 'scarf');
+      B.vmover(122, 5, 2, 3, 1.4, 0); B.cmover(128, 6, 2, 1.3, 0, 3);
+      B.ground(132, LEVEL_W - 1);
+      B.zap(136, 4, 9, 1.6, 0.6, 0); B.zap(140, 4, 9, 1.6, 0.6, 0.5); B.zap(144, 4, 9, 1.6, 0.6, 1.0);
+      B.pillar(147, 2); B.pillar(148, 4); B.gem(148, 3, 2);
+      B.wallEnd();
+    } },
+    '7-3': { w: 170, theme: 'timeTop', time: 300, checkpoint: 60, goal: 156, lighthouse: true, build(B) {
+      B.ground(0, 16);
+      B.block(7, 6, 'plane'); B.enemy('moyan', 12);
+      B.crumble(17, 24, 10); B.ground(25, 44);
+      B.wind(17, 40, 3.0, 1.5, -90, 0);
+      B.bolt(29, 2.0, 0); B.bolt(33, 2.0, 0.7); B.bolt(37, 2.0, 1.4);
+      B.enemy('hover', 47.5, 8, { sway: 0.45 }); B.enemy('hover', 51, 8, { sway: 0.45 }); B.enemy('hover', 54.5, 8, { sway: 0.45 });
+      B.ground(58, 92);
+      B.conveyor(62, 72, 10, 1); B.piston(65, 2, 1.4, 0); B.piston(68, 2, 1.4, 0.25); B.piston(71, 2, 1.4, 0.5);
+      B.plank(65, 71, 6); B.gem(68, 3, 0);
+      B.door(76, 4, 9, 2.0, 0.9, 0); B.zap(80, 4, 9, 1.8, 0.7, 0.6); B.door(84, 4, 9, 2.0, 0.9, 1.1);
+      B.cmover(96.5, 7, 2.5, 1.6, 0, 3); B.cmover(103, 7, 2.5, 1.6, Math.PI, 3);
+      B.ground(108, LEVEL_W - 1);
+      B.vmover(112, 3, 2, 5, 1.5);
+      for (let x = 114; x <= 118; x++) B.pillar(x, 5);
+      B.gem(116, 2, 1);
+      B.bolt(122, 2.0, 0); B.bolt(126, 2.0, 1.0);
+      B.piston(130, 2, 1.4, 0); B.piston(132, 2, 1.4, 0.3); B.piston(134, 2, 1.4, 0.6);
+      B.zap(138, 4, 9, 1.6, 0.6, 0); B.zap(141, 4, 9, 1.6, 0.6, 0.8);
+      B.wind(144, 152, 2.6, 1.2, -110, 0.4);
+      B.pillar(147, 3); B.gem(147, 2, 2);
+      B.wallEnd();
+    } },
+    '7-B': { w: 28, theme: 'timeBoss', time: 200, checkpoint: null, goal: null, build(B) {
+      B.ground(0, 27);
+      for (let y = 0; y < 10; y++) { B.set(0, y, '#'); B.set(27, y, '#'); }
+      B.plank(5, 7, 6); B.plank(20, 22, 6);
+      B.boss('toki');
     } },
   };
 
@@ -561,9 +847,12 @@
     2: { name: 'カラカラ砂丘島', boss: '砂ムカデ ザラザラ', icon: 'ZARA_HEAD' },
     3: { name: 'ツララ雪原島', boss: '雪だるま将軍', icon: 'SNOWMAN' },
     4: { name: 'シズク海底島', boss: '大ダコ ヌルリン', icon: 'TAKO' },
+    5: { name: 'クモリ城', boss: 'クモリ男爵', icon: 'BARON' },
+    6: { name: '歯車の時計島', boss: 'ギアゴーレム', icon: 'GEARBOT' },
+    7: { name: '時の灯台', boss: '時の番人 トキモリ', icon: 'TOKIMORI' },
   };
   const STAGES = [];
-  for (const w of [1, 2, 3, 4]) {
+  for (const w of [1, 2, 3, 4, 5, 6, 7]) {
     for (const k of ['1', '2', '3']) STAGES.push({ id: `${w}-${k}`, w, label: `${w}-${k}`, playable: true });
     STAGES.push({ id: `${w}-B`, w, label: 'BOSS', playable: true, boss: true });
   }
@@ -571,13 +860,14 @@
 
   // ------------------------------------------------------------------ セーブ（この端末のブラウザに保存）
   const SAVE_KEY = 'mister-postman-save-v1';
-  const emptySave = () => ({ cleared: {}, best: {}, gems: {}, last: 0, prologue: false, chapters: {} });
+  const emptySave = () => ({ cleared: {}, best: {}, gems: {}, last: 0, prologue: false, chapters: {}, preboss: {} });
   let save = emptySave();
   function loadSave() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (raw) save = Object.assign(emptySave(), JSON.parse(raw));
       if (save.chapter1) { save.chapters[1] = true; delete save.chapter1; }   // 古いセーブのつづき
+      if (!save.preboss) save.preboss = {};
     } catch (e) { save = emptySave(); }
   }
   function writeSave() {
@@ -591,7 +881,7 @@
     canvas.style.filter = `saturate(${v})`;
   }
 
-  const isSolid = c => c === '#' || c === 'B' || c === 'P' || c === 'U' || c === 'I' || c === 'Q' || c === 'C';
+  const isSolid = c => c === '#' || c === 'B' || c === 'P' || c === 'U' || c === 'I' || c === 'Q' || c === 'C' || c === 'D' || c === '<' || c === '>';
   const tileAt = (tx, ty) => (tx < 0 || tx >= LEVEL_W) ? '#' : (ty < 0 || ty >= ROWS) ? '.' : level[ty][tx];
   const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
@@ -661,6 +951,9 @@
     snow: { dirt: [[150, 162, 196], [106, 116, 152]], top: ['#dce8f8', '#f4f8ff', '#ffffff', '#a8b8d8'] },
     wetsand: { dirt: [[214, 196, 150], [168, 148, 108]], top: ['#e8d8a8', '#f8ecc4', '#ffffff', '#b8a070'] },
     rock: { dirt: [[110, 132, 146], [72, 88, 104]], top: ['#2e9a8c', '#4cc4ae', '#98ead8', '#1a625c'] },
+    stone: { dirt: [[112, 106, 134], [76, 70, 98]], top: ['#8a84a8', '#a8a2c4', '#d0cce4', '#5a5478'] },
+    brass: { dirt: [[176, 136, 82], [128, 94, 52]], top: ['#d8b060', '#f0cc78', '#fff0b0', '#8a6430'] },
+    time: { dirt: [[92, 82, 142], [56, 48, 100]], top: ['#b8a8f0', '#d8ccff', '#ffffff', '#6a58b0'] },
   };
   function makeGroundTile(top, seed, ts = TILESETS.grass) {
     const c = document.createElement('canvas'); c.width = 16; c.height = 16;
@@ -864,6 +1157,14 @@
 
   // マップからステージに入る（stamps はステージごとに数える）
   function enterStage(i) {
+    const st = STAGES[i];
+    if (st.boss && PRE_BOSS[st.w] && !save.preboss[st.w]) {
+      // ボスの前の会話（はじめての時だけ）
+      save.preboss[st.w] = true; writeSave();
+      stageIndex = i;
+      playDialog(PRE_BOSS[st.w], () => enterStage(i), st.id, st.w === 7 ? 'time' : 'castle');
+      return;
+    }
     stageIndex = i;
     run.stamps = 0; run.checkpoint = false; run.gems = [false, false, false];
     run.hearts = RULE.hearts; run.invT = 0; run.hurtT = 0;
@@ -881,7 +1182,7 @@
     state = 'play';
     showActors = true;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
-    for (const sc of [titleScreen, mapScreen, dialogEl]) sc.hidden = true;
+    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen')]) sc.hidden = true;
     document.body.classList.remove('cutscene', 'menu');
     setSat(save.cleared[STAGES[stageIndex].id] ? 1 : 0.35, false);
     run.time = levelDef.time || (STAGES[stageIndex].boss ? 150 : 200);
@@ -1131,10 +1432,11 @@
 
   function collideX() {
     const top = Math.floor(player.y / TILE), bot = Math.floor((player.y + player.h - 1) / TILE);
-    if (player.vx > 0) {
+    const v = player.vx + (player.pushX || 0);
+    if (v > 0) {
       const tx = Math.floor((player.x + player.w) / TILE);
       for (let ty = top; ty <= bot; ty++) if (isSolid(tileAt(tx, ty))) { player.x = tx * TILE - player.w; player.vx = 0; return; }
-    } else if (player.vx < 0) {
+    } else if (v < 0) {
       const tx = Math.floor(player.x / TILE);
       for (let ty = top; ty <= bot; ty++) if (isSolid(tileAt(tx, ty))) { player.x = (tx + 1) * TILE; player.vx = 0; return; }
     }
@@ -1238,14 +1540,28 @@
     for (const m of movers) {
       m.t += dt;
       const k = (Math.sin(m.t * m.speed - Math.PI / 2) + 1) / 2;
-      if (m.axis === 'y') { const ny = m.y0 + k * m.range; m.dy = ny - m.y; m.y = ny; m.dx = 0; }
+      if (m.axis === 'circle') {
+        const nx = m.cx + Math.cos(m.t * m.speed) * m.r - m.w / 2, ny = m.cy + Math.sin(m.t * m.speed) * m.r;
+        if (m.first) { m.x = nx; m.y = ny; m.first = false; }
+        m.dx = nx - m.x; m.dy = ny - m.y; m.x = nx; m.y = ny;
+      } else if (m.axis === 'y') { const ny = m.y0 + k * m.range; m.dy = ny - m.y; m.y = ny; m.dx = 0; }
       else { const nx = m.x0 + k * m.range; m.dx = nx - m.x; m.x = nx; m.dy = 0; }
       if (player.onMover === m) { player.x += m.dx; player.y += m.dy; }
     }
     player.onMover = null;
 
     // ---- 移動と当たり判定
-    player.x += player.vx * dt; collideX();
+    // ベルトコンベア・風でおされる
+    let push = 0;
+    if (player.onGround) {
+      const ut = tileAt(Math.floor((player.x + player.w / 2) / TILE), Math.floor((player.y + player.h + 1) / TILE));
+      if (ut === '<') push -= 48; else if (ut === '>') push += 48;
+    }
+    for (const tr of traps) {
+      if (tr.type === 'wind' && tr.live && player.x + player.w > tr.x0 * TILE && player.x < (tr.x1 + 1) * TILE) push += tr.force * (player.onGround ? 0.8 : 1);
+    }
+    player.pushX = push;
+    player.x += (player.vx + push) * dt; collideX();
     const prevTop = player.y;
     player.prevBottom = player.y + player.h;
     player.y += player.vy * dt; collideY(prevTop, player.prevBottom);
@@ -1396,7 +1712,7 @@
       const firstTime = !save.chapters[w];
       save.chapters[w] = true; writeSave();
       const next = Math.min(stageIndex + 1, STAGES.length - 1);
-      if (firstTime) playDialog(CHAPTER_END[w], () => enterMap(next), `${w}-3`);
+      if (firstTime) playDialog(CHAPTER_END[w], () => afterChapter(w, next), `${w}-3`, w === 7 ? 'ending' : 'warm');
       else enterMap(next);
       return;
     }
@@ -1560,6 +1876,59 @@
     }
   }
 
+  // クモリ城のシルエット（ワールド5）
+  function drawCastle(cx, groundY) {
+    const off = cx * 0.15, step = 260;
+    for (let i = Math.floor(off / step) - 1; i * step - off < viewW + step; i++) {
+      const x = Math.round(i * step - off + ((i * 53) % 70));
+      const base = groundY - 14;
+      ctx.fillStyle = 'rgba(30,22,52,.55)';
+      ctx.fillRect(x, base - 50, 70, 50);
+      for (let k = 0; k < 70; k += 10) ctx.fillRect(x + k, base - 56, 6, 6);
+      ctx.fillRect(x + 8, base - 80, 14, 30); ctx.fillRect(x + 48, base - 92, 16, 42);
+      ctx.beginPath(); ctx.moveTo(x + 6, base - 80); ctx.lineTo(x + 15, base - 96); ctx.lineTo(x + 24, base - 80); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x + 46, base - 92); ctx.lineTo(x + 56, base - 112); ctx.lineTo(x + 66, base - 92); ctx.fill();
+      ctx.fillStyle = 'rgba(255,220,120,.5)';
+      ctx.fillRect(x + 54, base - 80, 4, 6); ctx.fillRect(x + 30, base - 34, 4, 6);
+    }
+  }
+  // 歯車（ワールド6の遠く）
+  function drawGears(cx, groundY) {
+    const off = cx * 0.2, step = 150;
+    for (let i = Math.floor(off / step) - 1; i * step - off < viewW + step; i++) {
+      const r = 18 + ((i * 7) % 3) * 8;
+      const x = i * step - off + ((i * 41) % 60), y = groundY - 40 - ((i * 29) % 50);
+      const ang = time * (i % 2 ? 0.6 : -0.6);
+      ctx.fillStyle = 'rgba(110,76,40,.45)';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+      for (let k = 0; k < 8; k++) {
+        const a = ang + k * Math.PI / 4;
+        ctx.fillRect(Math.round(x + Math.cos(a) * (r + 3)) - 3, Math.round(y + Math.sin(a) * (r + 3)) - 3, 6, 6);
+      }
+      ctx.fillStyle = 'rgba(250,224,170,.35)';
+      ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, 7); ctx.fill();
+    }
+  }
+  // 星と、うかぶ時計（ワールド7）
+  function drawStarsClocks(cx) {
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 40; i++) {
+      const tw = (Math.sin(time * 2 + i) + 1) / 2;
+      ctx.globalAlpha = 0.4 + tw * 0.6;
+      ctx.fillRect((i * 97 + Math.floor(cx * 0.03)) % viewW, (i * 53) % 110, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    const off = cx * 0.1, step = 300;
+    for (let i = Math.floor(off / step) - 1; i * step - off < viewW + step; i++) {
+      const x = i * step - off + ((i * 37) % 80), y = 40 + ((i * 31) % 40), r = 16;
+      ctx.strokeStyle = 'rgba(220,210,255,.45)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+      const a1 = time * 0.5 + i, a2 = time * 3 + i;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a1) * r * 0.5, y + Math.sin(a1) * r * 0.5);
+      ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a2) * r * 0.8, y + Math.sin(a2) * r * 0.8); ctx.stroke();
+    }
+  }
+
   // ピラミッド（ワールド2の遠く）
   function drawPyramids(cx, groundY) {
     const off = cx * 0.12, step = 220;
@@ -1672,6 +2041,9 @@
     if (b.type === 'geko') updateGeko(b, dt, speedUp);
     else if (b.type === 'zara') updateZara(b, dt, speedUp);
     else if (b.type === 'tako') updateTako(b, dt, speedUp);
+    else if (b.type === 'baron') updateBaron(b, dt, speedUp);
+    else if (b.type === 'gear') updateGear(b, dt, speedUp);
+    else if (b.type === 'toki') updateToki(b, dt, speedUp);
     else updateSnowman(b, dt, speedUp);
 
     // 主人公とのふれあい（頭をふむとダメージ。ほかの場所をふんだら、はね返るだけ）
@@ -1700,6 +2072,9 @@
     if (b.type === 'zara') {
       return [{ x: b.x, y: b.y, w: b.w, h: b.h, head: true }, ...zaraSegs(b).map(p => ({ x: p.x + 1, y: p.y + 1, w: 12, h: 9 }))];
     }
+    if (b.type === 'baron') return [{ x: b.x + 3, y: b.y, w: b.w - 6, h: 10, head: true }, { x: b.x - 4, y: b.y + 10, w: b.w + 8, h: b.h - 10 }];
+    if (b.type === 'toki') return b.alpha < 0.5 ? [] : [{ x: b.x + 2, y: b.y, w: b.w - 4, h: 9, head: true }, { x: b.x, y: b.y + 9, w: b.w, h: b.h - 9 }];
+    if (b.type === 'gear') return [{ x: b.x + 2, y: b.y, w: b.w - 4, h: 9, head: true }, { x: b.x, y: b.y + 9, w: b.w, h: b.h - 9 }];
     if (b.type === 'tako') return [{ x: b.x + 4, y: b.y, w: b.w - 8, h: 10, head: true }, { x: b.x, y: b.y + 10, w: b.w, h: b.h - 10 }];
     if (b.type === 'snow') return [{ x: b.x + 3, y: b.y, w: b.w - 6, h: 11, head: true }, { x: b.x - 1, y: b.y + 11, w: b.w + 2, h: b.h - 11 }];
     return [{ x: b.x, y: b.y, w: b.w, h: b.h, head: true }];
@@ -1783,6 +2158,14 @@
 
   function updateBossShots(dt) {
     for (const sh of bossShots) {
+      if (sh.roll) {
+        // 転がる歯車：地面を一直線に転がる。かべで消える
+        sh.x += sh.vx * dt; sh.t = (sh.t || 0) + dt;
+        if (sh.x < TILE || sh.x > (LEVEL_W - 1) * TILE - sh.w) sh.done = true;
+        for (const ball of balls) if (!ball.done && overlap(ball, sh)) { ball.done = true; sh.done = true; }
+        if (!sh.done && state === 'play' && overlap(player, sh)) { if (run.invT > 0) sh.done = true; else damage(); }
+        continue;
+      }
       sh.vy = Math.min(sh.vy + 900 * dt, 360);
       sh.x += sh.vx * dt; sh.y += sh.vy * dt;
       if (sh.y + sh.h >= 10 * TILE) {
@@ -1813,7 +2196,7 @@
   function hitBoss(amount, stomped) {
     const b = boss;
     b.hp = Math.max(0, b.hp - amount);
-    b.hurtT = stomped ? 1.0 : 0.25;
+    b.hurtT = (stomped || amount >= 1) ? 1.0 : 0.25;    // むてきでさわったときも、ふんだときと同じ間をあける
     sfx.bossHit();
     if (stomped) {
       player.vy = -PHYS.stompHigh; player.jumping = input.jump; player.usedDouble = false;
@@ -1840,6 +2223,7 @@
     return 1 - (ph - down - 1.2) / 0.3;
   };
   function trapBox(tr) {
+    if (tr.type === 'bolt') return { x: tr.x * TILE + 3, y: 0, w: 10, h: 10 * TILE };
     if (tr.type === 'piston') {
       const hgt = tr.f * tr.h * TILE;
       return { x: tr.x * TILE + 2, y: 10 * TILE - hgt, w: 12, h: hgt };
@@ -1849,6 +2233,32 @@
   function updateTraps(dt) {
     trapClock += dt;
     for (const tr of traps) {
+      if (tr.type === 'door') {
+        // 扉：開いているあいだだけ通れる（主人公がはさまるときは閉めない）
+        const ph = (trapClock + tr.phase) % tr.period;
+        const wantOpen = ph < tr.open;
+        tr.warn = !wantOpen && ph > tr.period - 0.5;
+        const box = { x: tr.x * TILE, y: tr.row0 * TILE, w: TILE, h: (tr.row1 - tr.row0 + 1) * TILE };
+        if (wantOpen && tr.shut) { tr.shut = false; for (let y = tr.row0; y <= tr.row1; y++) level[y][tr.x] = '.'; }
+        else if (!wantOpen && !tr.shut && !overlap(player, box)) { tr.shut = true; for (let y = tr.row0; y <= tr.row1; y++) level[y][tr.x] = 'D'; }
+        continue;
+      }
+      if (tr.type === 'bolt') {
+        const ph = (trapClock + tr.phase) % tr.period;
+        const live = ph > tr.period - 0.3;
+        tr.warn = !live && ph > tr.period - 1.0;
+        const near = Math.abs(tr.x * TILE - player.x) < viewW * 0.6;
+        if (live && !tr.live && near) { sfx.thud(); shake = Math.max(shake, 0.1); }
+        tr.live = live;
+        if (live && overlap(player, trapBox(tr))) damage();
+        continue;
+      }
+      if (tr.type === 'wind') {
+        const ph = (trapClock + tr.phase) % tr.period;
+        tr.live = ph < tr.on;
+        tr.warn = !tr.live && ph > tr.period - 0.6;
+        continue;
+      }
       if (tr.type === 'piston') {
         tr.f = pistonF(tr);
         const ph = (trapClock + tr.phase) % tr.period;
@@ -1880,9 +2290,19 @@
   }
   function drawTraps(camY, cx) {
     for (const tr of traps) {
+      if (tr.type === 'wind') { drawWind(tr, camY, cx); continue; }
+      if (tr.type === 'door') {
+        if (tr.warn && !tr.shut) {
+          ctx.fillStyle = 'rgba(255,90,90,.6)';
+          const dx0 = Math.round(tr.x * TILE - cx);
+          for (let y = tr.row0; y <= tr.row1; y++) ctx.fillRect(dx0 + 6, Math.round(y * TILE - camY) + 6, 4, 4);
+        }
+        continue;
+      }
       const b = trapBox(tr);
       const x = Math.round(b.x - cx);
       if (x < -20 || x > viewW + 20) continue;
+      if (tr.type === 'bolt') { drawBolt(tr, x, camY); continue; }
       if (tr.type === 'piston') {
         // 出る前は、地面がぶくぶく
         if (tr.warn) {
@@ -1915,6 +2335,46 @@
           }
         }
       }
+    }
+  }
+
+  // 雷：上に黒い雲。落ちる前は雲が光り、地面に小さな火花
+  function drawBolt(tr, x, camY) {
+    const gy = Math.round(10 * TILE - camY);
+    const cyy = 14;
+    const flash = tr.warn && Math.floor(time * 14) % 2 === 0;
+    ctx.fillStyle = flash ? '#a8a0d0' : '#4a4468';
+    ctx.beginPath(); ctx.ellipse(x + 5, cyy + 4, 16, 7, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x - 4, cyy + 7, 9, 5, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 14, cyy + 7, 9, 5, 0, 0, 7); ctx.fill();
+    if (tr.warn) {
+      ctx.fillStyle = 'rgba(255,240,120,.7)';
+      ctx.fillRect(x + 1 + (Math.floor(time * 20) % 3) * 3, gy - 3, 2, 2);
+    }
+    if (tr.live) {
+      ctx.fillStyle = 'rgba(255,250,200,.35)'; ctx.fillRect(x - 3, cyy + 8, 16, gy - cyy - 8);
+      ctx.fillStyle = '#fff8a0';
+      let px = x + 4;
+      for (let y = cyy + 8; y < gy; y += 6) {
+        const nx = x + 2 + ((y * 13 + Math.floor(time * 40)) % 7);
+        ctx.fillRect(Math.min(px, nx), y, Math.abs(nx - px) + 3, 3);
+        ctx.fillRect(nx, y, 3, 6);
+        px = nx;
+      }
+    }
+  }
+  // 風：流れる白い線（吹く前は少しだけ）
+  function drawWind(tr, camY, cx) {
+    const x0 = tr.x0 * TILE - cx, x1 = (tr.x1 + 1) * TILE - cx;
+    if (x1 < 0 || x0 > viewW) return;
+    const n = tr.live ? 14 : tr.warn ? 4 : 0;
+    const dir = Math.sign(tr.force);
+    ctx.fillStyle = 'rgba(255,255,255,.75)';
+    for (let i = 0; i < n; i++) {
+      const span = x1 - x0;
+      const xx = x0 + (((i * 67 + time * 180 * dir) % span) + span) % span;
+      const yy = Math.round(10 * TILE - camY) - 12 - ((i * 23) % 110);
+      ctx.fillRect(Math.round(xx), yy, 14, 1);
     }
   }
 
@@ -1957,7 +2417,7 @@
   function updateSlams(dt) {
     for (const sl of slams) {
       sl.t += dt;
-      if (sl.t > sl.warn && !sl.hit) { sl.hit = true; shake = 0.15; sfx.thud(); }
+      if (sl.t > sl.warn && !sl.hit) { sl.hit = true; shake = 0.15; sl.kind === 'sand' ? sfx.crumble() : sfx.thud(); }
       if (sl.hit && sl.t < sl.warn + 0.45 && state === 'play' &&
           overlap(player, { x: sl.x - 9, y: 0, w: 18, h: 10 * TILE })) damage();
     }
@@ -1966,6 +2426,24 @@
   function drawSlams(camY, cx) {
     for (const sl of slams) {
       const x = Math.round(sl.x - cx), gy = Math.round(10 * TILE - camY);
+      if (sl.t < 0) continue;
+      if (sl.kind === 'bolt' || sl.kind === 'sand') {
+        if (!sl.hit) {
+          const k = Math.max(0, sl.t / sl.warn);
+          ctx.fillStyle = sl.kind === 'bolt' ? `rgba(255,240,120,${0.2 + k * 0.5})` : `rgba(240,210,140,${0.2 + k * 0.5})`;
+          ctx.fillRect(x - 6 - Math.round(k * 4), gy - 2, 12 + Math.round(k * 8), 2);
+          if (sl.kind === 'sand') { ctx.fillStyle = 'rgba(240,210,140,.6)'; for (let i = 0; i < 4; i++) ctx.fillRect(x - 4 + i * 3, ((time * 80 + i * 17) % 60) + 30, 1, 3); }
+        } else if (sl.kind === 'bolt') {
+          ctx.fillStyle = 'rgba(255,250,200,.35)'; ctx.fillRect(x - 8, 0, 16, gy);
+          ctx.fillStyle = '#fff8a0';
+          for (let y = 0; y < gy; y += 6) { const nx = x - 3 + ((y * 13 + Math.floor(time * 40)) % 7); ctx.fillRect(nx, y, 3, 6); }
+        } else {
+          ctx.fillStyle = '#c8a060'; ctx.fillRect(x - 7, 0, 14, gy);
+          ctx.fillStyle = '#f0d890'; ctx.fillRect(x - 4, 0, 5, gy);
+          ctx.fillStyle = '#fff0b4'; for (let y = (Math.floor(time * 200) % 8); y < gy; y += 8) ctx.fillRect(x - 2, y, 2, 3);
+        }
+        continue;
+      }
       if (!sl.hit) {
         // 落ちてくる場所に影
         const k = sl.t / sl.warn;
@@ -1979,6 +2457,100 @@
         for (let yy = top + 4; yy < gy; yy += 8) { ctx.fillStyle = '#ff7868'; ctx.fillRect(x - 4, yy, 4, 4); }
       }
     }
+  }
+
+  // ------------------------------------------------------------------ ボス：クモリ男爵（雷雲にのる）
+  // 空を左右にただよい、雷を落とす → 手下をよぶ → 地面までおりてくる（このとき頭をふめる）
+  function updateBaron(b, dt, speedUp) {
+    const mid = LEVEL_W * TILE / 2;
+    b.face = player.x < b.x ? -1 : 1;
+    if (b.mode === 'idle' || b.mode === 'float') {
+      b.mode = 'float';
+      b.x = mid - b.w / 2 + Math.sin(b.t * (0.7 + speedUp * 0.4)) * 8 * TILE;
+      b.y = lerp(b.y, b.homeY + Math.sin(b.t * 2) * 6, Math.min(1, dt * 3));
+      b.act = (b.act || 0) + dt;
+      if (b.act > 2.6 - speedUp) {
+        b.act = 0;
+        const what = ['bolt', 'swoop', 'summon', 'bolt', 'swoop'][b.throws % 5];
+        b.throws++;
+        if (what === 'bolt') {
+          for (const off of [0, 80, -80]) {
+            const x = Math.max(TILE * 2, Math.min((LEVEL_W - 3) * TILE, player.x + player.w / 2 + off));
+            slams.push({ x, t: 0, warn: 0.8 - speedUp * 0.15, kind: 'bolt' });
+          }
+        } else if (what === 'summon') {
+          if (enemies.filter(e => !e.dead).length < 3) {
+            for (const sx of [3, LEVEL_W - 4]) enemies.push({ kind: 'moyan', x: sx * TILE, y: 6 * TILE, baseY: 0, w: 12, h: 14, vx: sx < 10 ? 30 : -30, vy: 0, active: true, dead: null, deadT: 0, onGround: false, t: 0 });
+          }
+        } else { b.mode = 'swoop'; b.t = 0; b.swoopX = Math.max(2 * TILE, Math.min((LEVEL_W - 3) * TILE, player.x)); }
+      }
+    } else if (b.mode === 'swoop') {
+      // おりてくる → 地面で少し休む（チャンス）→ もどる
+      const groundY = 10 * TILE - b.h;
+      if (b.t < 0.7) { b.x = lerp(b.x, b.swoopX, Math.min(1, dt * 4)); b.y = lerp(b.y, groundY, Math.min(1, dt * 5)); }
+      else if (b.t < 2.3 - speedUp * 0.4) { b.y = groundY; if (!b.landed) { b.landed = true; landShock(b, 100 + speedUp * 50); } }
+      else { b.y = lerp(b.y, b.homeY, Math.min(1, dt * 3)); if (b.t > 3.0) { b.mode = 'float'; b.landed = false; b.t = Math.asin(Math.max(-1, Math.min(1, (b.x + b.w / 2 - mid) / (8 * TILE)))) / (0.7 + speedUp * 0.4); } }
+    }
+  }
+
+  // ------------------------------------------------------------------ ボス：ギアゴーレム（転がる歯車）
+  function updateGear(b, dt, speedUp) {
+    if (b.mode === 'idle') {
+      b.face = player.x < b.x ? -1 : 1;
+      b.vx = b.face * (30 + speedUp * 30);
+      if (b.t > 1.4 - speedUp * 0.5) {
+        b.t = 0;
+        if (b.throws < 2) {
+          b.throws++;
+          bossShots.push({ x: b.x + b.w / 2 - 6, y: 10 * TILE - 12, w: 12, h: 12, vx: b.face * (140 + speedUp * 40), vy: 0, roll: true, bounces: 0 });
+          sfx.fire();
+        } else { b.mode = 'crouch'; b.throws = 0; b.vx = 0; }
+      }
+    } else if (b.mode === 'crouch') {
+      b.vx = 0; b.squash = Math.min(1, b.t / 0.3);
+      if (b.t > 0.35) { b.mode = 'air'; b.t = 0; b.squash = 0; b.vy = -330; b.vx = Math.max(-130, Math.min(130, (player.x - b.x) * 1.1)); }
+    }
+    const wasAir = b.mode === 'air';
+    if (moveBody(b, dt) && b.mode === 'idle') b.vx = 0;
+    if (wasAir && b.onGround && b.t > 0.1) { b.mode = 'idle'; b.t = 0; landShock(b, 120 + speedUp * 60); }
+  }
+
+  // ------------------------------------------------------------------ ボス：時の番人 トキモリ（さいごのボス）
+  // 砂をふらせる → 消えて反対側へワープ → 砂の柱を3本 → ジャンプ、のくり返し
+  function updateToki(b, dt, speedUp) {
+    if (b.mode === 'idle') {
+      b.face = player.x < b.x ? -1 : 1;
+      if (b.t > 0.9 - speedUp * 0.5) {
+        b.t = 0;
+        const what = ['sand', 'warp', 'pillars', 'jump'][b.throws % 4];
+        b.throws++;
+        if (what === 'sand') {
+          for (let i = 0; i < 5; i++) {
+            const x = Math.max(TILE * 2, Math.min((LEVEL_W - 3) * TILE, player.x + (i - 2) * 56 + (Math.random() - 0.5) * 20));
+            slams.push({ x, t: -i * 0.18, warn: 0.75, kind: 'sand' });
+          }
+        } else if (what === 'warp') { b.mode = 'fadeout'; }
+        else if (what === 'pillars') {
+          [0, 1, 2].forEach(i => slams.push({ x: Math.max(TILE * 2, Math.min((LEVEL_W - 3) * TILE, player.x + player.w / 2 + (i - 1) * 40)), t: -i * 0.3, warn: 0.7, kind: 'sand' }));
+        } else { b.mode = 'crouch'; }
+      }
+    } else if (b.mode === 'fadeout') {
+      b.alpha = Math.max(0, 1 - b.t / 0.4);
+      if (b.t > 0.45) {
+        b.x = player.x < LEVEL_W * TILE / 2 ? (LEVEL_W - 5) * TILE : 4 * TILE;
+        b.mode = 'fadein'; b.t = 0;
+      }
+    } else if (b.mode === 'fadein') {
+      b.alpha = Math.min(1, b.t / 0.4);
+      if (b.t > 0.45) { b.mode = 'idle'; b.t = 0; b.alpha = 1; }
+    } else if (b.mode === 'crouch') {
+      b.squash = Math.min(1, b.t / 0.3);
+      if (b.t > 0.35) { b.mode = 'air'; b.t = 0; b.squash = 0; b.vy = -350; b.vx = Math.max(-140, Math.min(140, (player.x - b.x) * 1.2)); }
+    }
+    const wasAir = b.mode === 'air';
+    if (b.mode !== 'fadeout' && b.mode !== 'fadein') moveBody(b, dt);
+    if (wasAir && b.onGround && b.t > 0.1) { b.mode = 'idle'; b.t = 0; b.vx = 0; landShock(b, 130 + speedUp * 50); }
+    if (b.onGround && b.mode !== 'air') b.vx = 0;
   }
 
   // ボスをたおすと出る、大きなヒカリのかけら
@@ -2003,6 +2575,14 @@
     }
     // 雪玉
     for (const sh of bossShots) {
+      if (sh.roll) {
+        const gx = Math.round(sh.x + 6 - cx), gy = Math.round(sh.y + 6 - camY), a = (sh.t || 0) * 10 * Math.sign(sh.vx);
+        ctx.fillStyle = '#281c34'; ctx.beginPath(); ctx.arc(gx, gy, 7, 0, 7); ctx.fill();
+        ctx.fillStyle = '#d8b060'; ctx.beginPath(); ctx.arc(gx, gy, 5, 0, 7); ctx.fill();
+        for (let k = 0; k < 6; k++) { const aa = a + k * Math.PI / 3; ctx.fillRect(Math.round(gx + Math.cos(aa) * 6) - 1, Math.round(gy + Math.sin(aa) * 6) - 1, 3, 3); }
+        ctx.fillStyle = '#8a6430'; ctx.fillRect(gx - 1, gy - 1, 2, 2);
+        continue;
+      }
       const x = Math.round(sh.x + 5 - cx), y = Math.round(sh.y + 5 - camY);
       ctx.fillStyle = '#281c34'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill();
       ctx.fillStyle = sh.ink ? '#5a3a78' : '#f4f8ff'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill();
@@ -2031,14 +2611,34 @@
       if (b.dead) { ctx.save(); ctx.translate(x + img.width / 2, y + img.height / 2); ctx.scale(1, -1); ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore(); }
       else ctx.drawImage(img, x, y);
     } else {
-      const img = SPR[({ geko: 'GEKO', snow: 'SNOWMAN', tako: 'TAKO' })[b.type] + flip];
+      if (b.type === 'baron') {
+        // 雷雲（大きなくも）に男爵がのっている
+        const cloud = SPR.MOYAN;
+        const cx0 = Math.round(b.x + b.w / 2 - cloud.width - cx), cy0 = Math.round(b.y + b.h - cloud.height * 1.2 - camY);
+        ctx.globalAlpha = 0.95;
+        ctx.drawImage(cloud, cx0, cy0, cloud.width * 2, Math.round(cloud.height * 1.2));
+        ctx.globalAlpha = 1;
+        const bi = SPR['BARON' + flip];
+        const bx = Math.round(b.x + b.w / 2 - bi.width / 2 - cx), by = Math.round(b.y - camY) - 2;
+        if (b.dead) { ctx.save(); ctx.translate(bx + bi.width / 2, by + bi.height / 2); ctx.scale(1, -1); ctx.drawImage(bi, -bi.width / 2, -bi.height / 2); ctx.restore(); }
+        else ctx.drawImage(bi, bx, by);
+        if (b.mode === 'float' && b.act > 2.0 - (b.maxHp - b.hp) * 0.25) { ctx.fillStyle = '#fff8a0'; ctx.fillRect(bx + 4 + Math.floor(time * 30) % 8, by + bi.height + 8, 2, 4); }
+        drawBossHp(b);
+        return;
+      }
+      const img = SPR[({ geko: 'GEKO', snow: 'SNOWMAN', tako: 'TAKO', gear: 'GEARBOT', toki: 'TOKIMORI' })[b.type] + flip];
+      ctx.globalAlpha = b.alpha === undefined ? 1 : b.alpha;
       const sq = b.squash * 0.25, st = b.mode === 'air' ? 0.12 : 0;
       const w = Math.round(img.width * (1 + sq - st)), h = Math.round(img.height * (1 - sq + st));
       const x = Math.round(b.x + b.w / 2 - w / 2 - cx), y = Math.round(b.y + b.h - h - camY + 1);
       if (b.dead) {
         ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(1, -1); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
       } else ctx.drawImage(img, x, y, w, h);
+      ctx.globalAlpha = 1;
     }
+    drawBossHp(b);
+  }
+  function drawBossHp(b) {
     // HP（画面上のまん中）
     if (!b.dead) {
       const n = b.maxHp, bw = 18;
@@ -2085,13 +2685,16 @@
     }
 
     // 雲（とても遠い）
-    if (!theme.water) for (const [x, y, img] of CLOUDS) {
+    if (!theme.water && !theme.castle && !theme.stars && theme.song !== 'final') for (const [x, y, img] of CLOUDS) {
       const sx = ((x - cx * 0.08) % 560 + 560) % 560 - 60;
       ctx.drawImage(img, Math.round(sx), y - camY * 0.1);
     }
     // 山（奥ほどゆっくり動く）
     const groundY = 10 * TILE - camY;
     if (theme.aurora) drawAurora();
+    if (theme.stars) drawStarsClocks(cx);
+    if (theme.castle) drawCastle(cx, groundY);
+    if (theme.gears) drawGears(cx, groundY);
     if (theme.pyramids) drawPyramids(cx, groundY);
     LAYERS.forEach((L, li) => {
       ctx.fillStyle = theme.mtn[li];
@@ -2143,6 +2746,21 @@
       }
       else if (c === 'P') ctx.drawImage(SPR.PARCEL, dx, dy);
       else if (c === 'I') ctx.drawImage(ICE, dx, dy);
+      else if (c === 'D') {
+        ctx.fillStyle = '#5a5e74'; ctx.fillRect(dx, dy, 16, 16);
+        ctx.fillStyle = '#8a8ea8'; ctx.fillRect(dx + 2, dy, 3, 16); ctx.fillRect(dx + 11, dy, 3, 16);
+        ctx.fillStyle = '#3a3c50'; ctx.fillRect(dx, dy + 14, 16, 2);
+        ctx.fillStyle = '#ffd23c'; ctx.fillRect(dx + 6, dy + 6, 4, 4);
+      }
+      else if (c === '<' || c === '>') {
+        const d = c === '<' ? -1 : 1;
+        ctx.fillStyle = '#3a3c50'; ctx.fillRect(dx, dy, 16, 16);
+        ctx.fillStyle = '#6a6e88'; ctx.fillRect(dx, dy + 2, 16, 5);
+        ctx.fillStyle = '#ffd23c';
+        const o = ((Math.floor(time * 24 * d) % 8) + 8) % 8;
+        for (let k = -8; k < 16; k += 8) { const ax = dx + k + o; if (ax >= dx && ax <= dx + 12) { ctx.fillRect(ax, dy + 3, 2, 3); ctx.fillRect(ax + d, dy + 4, 2, 1); } }
+        ctx.fillStyle = '#9a9eb8'; ctx.fillRect(dx + 3, dy + 10, 3, 3); ctx.fillRect(dx + 10, dy + 10, 3, 3);
+      }
       else if (c === 'C') {
         const cr = crumbles[tx + ',' + ty];
         const sh = cr && !cr.gone ? Math.round(Math.sin(time * 70)) : 0;
@@ -2390,7 +3008,7 @@
   drawFace('map-hero', SPR.STAND);
 
   function showMenuScene(el) {
-    for (const sc of [titleScreen, mapScreen, dialogEl]) sc.hidden = sc !== el;
+    for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen')]) sc.hidden = sc !== el;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
     document.body.classList.add('menu');
     document.body.classList.remove('cutscene');
@@ -2438,7 +3056,7 @@
     setSat(save.cleared[`${mapWorld}-1`] ? 1 : 0.35, false);
     showMenuScene(mapScreen);
     mapNodes.innerHTML = '';
-    document.getElementById('map-world').textContent = 'WORLD ' + mapWorld;
+    document.getElementById('map-world').textContent = 'WORLD ' + mapWorld + (mapWorld >= 6 ? ' ・ 第二幕' : '');
     const prevW = WORLDS[mapWorld - 1], nextW = WORLDS[mapWorld + 1];
     document.getElementById('btn-world-prev').disabled = !prevW;
     document.getElementById('btn-world-next').disabled = !nextW || !unlocked(firstOfWorld(mapWorld + 1));
@@ -2518,6 +3136,72 @@
     { who: 'postman', text: 'うん。あとは男爵に届けるだけだ。' },
     { who: 'pocchi', text: 'クモリ城へ行こう！' },
   ];
+  const PRE_BOSS = {};
+  PRE_BOSS[5] = [
+    { who: 'baron', text: '灯台を守っても、だれもお礼を言わなかった！' },
+    { who: 'postman', text: 'ちがう！　みんな手紙を書いていたんだ。' },
+    { who: 'baron', text: 'うそだ！　そんなもの、とどいていない！' },
+    { who: 'postman', text: 'だから今、届けに来た！' },
+  ];
+  PRE_BOSS[7] = [
+    { who: 'toki', text: 'わたしは時の番人、トキモリ。' },
+    { who: 'toki', text: 'ここに来られるのは、本当の配達員だけだ。' },
+    { who: 'postman', text: '手紙を受け取りに来ました！' },
+    { who: 'toki', text: 'ならば、その力を見せてみよ！' },
+  ];
+  CHAPTER_END[5] = [
+    { who: 'postman', text: '男爵、お届けものです。' },
+    { who: 'baron', text: '…「いつも光をありがとう」…。' },
+    { who: 'baron', text: 'わたしは…ずっと、ひとりだと思っていた。' },
+    { who: 'pocchi', text: '見て！　全部の灯台が光ってる！' },
+    { who: 'postman', text: 'さあ、今日も配達だ！' },
+  ];
+  const TEASER = [
+    { who: 'pocchi', text: 'ポストマン！　あなたあての手紙が来てるよ。' },
+    { who: 'postman', text: 'ぼくに？　…差出人が書いてない。' },
+    { who: 'postman', text: '「時の灯台で待つ」…？' },
+    { who: 'pocchi', text: '時の灯台って、歯車の時計島のずっと先だよ！' },
+    { who: 'postman', text: '行ってみよう。新しい配達だ！' },
+  ];
+  CHAPTER_END[6] = [
+    { who: 'pocchi', text: 'この古い帽子…ポストマンと同じマーク！' },
+    { who: 'postman', text: 'おじいちゃんの帽子だ。むかし、配達員だったんだ。' },
+    { who: 'pocchi', text: 'あの手紙の字、帽子のメモと同じ字だよ。' },
+    { who: 'postman', text: '…まさか。時の灯台へ急ごう！' },
+  ];
+  CHAPTER_END[7] = [
+    { who: 'toki', text: '見事だ、2代目ポストマン。あずかっていた手紙をわたそう。' },
+    { who: 'letter', text: '「未来のポストマンへ。手紙は、人と人の心をつなぐ光だ。」' },
+    { who: 'letter', text: '「おまえなら、きっと届けられる。たのんだぞ。　おじいちゃんより」' },
+    { who: 'postman', text: 'おじいちゃん…ちゃんと、届いたよ。' },
+    { who: 'pocchi', text: '時の灯台が光ってる！　すべての島がつながったよ！' },
+  ];
+
+  // ---- 幕の終わり（第一幕おわり → 予告 → 第二幕へ ／ THE END）
+  const actScreen = document.getElementById('act-screen');
+  let actDone = null;
+  function showAct(title, sub, done) {
+    state = 'act'; showActors = false;
+    buildLevel('1-1'); enemies = []; items = []; particles.length = 0; boss = null; movers = []; traps = [];
+    // 幕の終わりは、すっきりした景色だけ（地面をひとつながりにする）
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < LEVEL_W; x++) level[y][x] = y >= 10 ? '#' : '.';
+    setSat(1, false);
+    showMenuScene(actScreen);
+    document.getElementById('act-title').textContent = title;
+    document.getElementById('act-sub').textContent = sub;
+    actDone = done;
+  }
+  tap('btn-act-next', () => { if (actDone) { const d = actDone; actDone = null; d(); } });
+  function afterChapter(w, next) {
+    if (w === 5) {
+      save.act1 = true; writeSave();
+      showAct('第一幕　おわり', 'ACT 1 ・ THE END', () =>
+        playDialog(TEASER, () => showAct('第二幕へ　つづく', 'TO BE CONTINUED', () => enterMap(next)), '1-1', 'map'));
+    } else if (w === 7) {
+      save.act2 = true; writeSave();
+      showAct('THE END', 'ミスターポストマン　おしまい ・ ありがとう！', () => enterTitle());
+    } else enterMap(next);
+  }
   CHAPTER_END[3] = [
     { who: 'pocchi', text: 'この郵便ポスト、手紙でいっぱい！' },
     { who: 'postman', text: '全部、男爵あてだ。島のみんなからだよ。' },
@@ -2527,16 +3211,21 @@
   const WHO = {
     postman: { name: 'ポストマン', face: 'STAND', cls: '' },
     pocchi: { name: 'ポッチ', face: 'POCCHI', cls: 'pocchi' },
+    baron: { name: 'クモリ男爵', face: 'BARON', cls: 'baron' },
+    toki: { name: 'トキモリ', face: 'TOKIMORI', cls: 'toki' },
+    letter: { name: '手紙', face: 'LETTER_1UP', cls: 'letter' },
   };
   let dlg = null;
   const dlgName = document.getElementById('dialog-name');
   const dlgText = document.getElementById('dialog-text');
-  function playDialog(lines, done, sceneId) {
+  function playDialog(lines, done, sceneId, music) {
     const atLighthouse = !!sceneId;
     state = 'dialog'; showActors = false;
-    buildLevel(sceneId || '1-1'); enemies = []; items = []; particles.length = 0; boss = null; bigGem = null;
+    SND.setTempo(1);
+    buildLevel(sceneId || '1-1'); enemies = []; items = []; particles.length = 0; bigGem = null;
+    if (!(sceneId && sceneId.endsWith('B'))) boss = null;     // ボスの前の会話ではボスも見せる
     run.checkpoint = false; placePlayer(); showActors = true;
-    if (atLighthouse) {
+    if (atLighthouse && goal) {
       // 1-3 のゴールの先、光がもどった灯台の前で話す
       player.x = goal.x + 2 * TILE; player.y = 10 * TILE - player.h;
       camX = Math.max(0, Math.min(player.x - viewW * 0.35, LEVEL_W * TILE - viewW));
@@ -2544,7 +3233,7 @@
     }
     setSat(atLighthouse ? 1 : 0, false);       // プロローグは色が消えた世界
     showMenuScene(dialogEl);
-    dlg = { lines, i: -1, done, shown: 0, full: true, music: atLighthouse ? 'warm' : 'sad' };
+    dlg = { lines, i: -1, done, shown: 0, full: true, music: music || (atLighthouse ? 'warm' : 'sad') };
     nextLine();
   }
   function nextLine() {
@@ -2577,6 +3266,7 @@
     if (state === 'title') want = 'title';
     else if (state === 'map') want = 'map';
     else if (state === 'dialog') want = dlg ? dlg.music : null;
+    else if (state === 'act') want = 'ending';
     else if (state === 'play' || state === 'pause') {
       if (boss && boss.dead) return;
       want = run.invT > 0 ? 'invincible' : theme.song;
@@ -2610,7 +3300,7 @@
       time += dt;
     } else {
       acc = 0;
-      if (state === 'title' || state === 'map') {
+      if (state === 'title' || state === 'map' || state === 'act') {
         // 背景の世界をゆっくり流す
         camX = (camX + 18 * dt) % Math.max(1, LEVEL_W * TILE - viewW - 20);
         time += dt;
@@ -2638,6 +3328,6 @@
     player, run, keys: keyKeys, sync: syncInput, collect, damage,
     get level() { return level; }, get enemies() { return enemies; }, get items() { return items; },
     get balls() { return balls; }, get state() { return state; }, get stamps() { return run.stamps; },
-    get save() { return save; }, get levelDef() { return levelDef; }, enterStage, enterMap, enterTitle, get boss() { return boss; }, get bigGem() { return bigGem; },
+    get save() { return save; }, get levelDef() { return levelDef; }, get movers() { return movers; }, enterStage, enterMap, enterTitle, get boss() { return boss; }, get bigGem() { return bigGem; },
   };
 })();

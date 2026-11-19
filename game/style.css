@@ -325,3 +325,17 @@ body.cutscene #pad, body.cutscene #hud, body.menu #pad, body.menu #hud { opacity
 #time-pill.hurry { background: rgba(200,40,50,.8); animation: hurry .5s steps(2) infinite; }
 @keyframes hurry { 50% { background: rgba(120,20,30,.8); } }
 @media (prefers-reduced-motion: reduce) { #time-pill.hurry { animation: none; } }
+
+/* 幕の終わり */
+#act-screen { display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%, rgba(20,16,50,.75), rgba(20,16,50,.35)); }
+#act-screen[hidden] { display: none; }
+.act-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 0 16px; }
+#act-title { margin: 0; font-family: var(--pixel); font-weight: 400; font-size: 44px; letter-spacing: .12em; color: #fff;
+  text-shadow: 0 4px 0 #281c34, 4px 0 0 #281c34, -4px 0 0 #281c34, 0 -4px 0 #281c34; animation: actIn 1.2s ease-out both; }
+#act-sub { margin: 0 0 8px; font-family: var(--pixel); font-size: 16px; letter-spacing: .2em; color: #ffec96; }
+@keyframes actIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #act-title { animation: none; } }
+.dialog-name.baron { background: #60228c; }
+.dialog-name.toki { background: #4a3e8a; }
+.dialog-name.letter { background: #e66ea0; }

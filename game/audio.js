@@ -193,6 +193,44 @@
       { wave: 0.125, vol: 0.09, step: 1, notes: 'E5 - - D5 - C5 | B4 - - - - . | C5 - - E5 - A5 | G#5 - - - - . ' },
       { wave: 'tri', vol: 0.26, step: 3, notes: 'A2 G2 F2 E2 ' },
     ] },
+    // ワールド5 クモリ城：おもおもしい短調
+    castle: { bpm: 120, tracks: [
+      { wave: 0.25, vol: 0.13, step: 0.5, notes:
+        'D5 - A4 D5 | F5 - E5 D5 | C#5 - A4 C#5 | E5 - - . | D5 - F5 A5 | Bb5 - A5 G5 | F5 E5 D5 C#5 | D5 - - . ' },
+      { wave: 0.125, vol: 0.07, step: 1, notes: 'A4 - D5 - | A4 - G4 - | Bb4 - A4 - | A4 - - . ' },
+      { wave: 'tri', vol: 0.3, step: 0.5, notes: 'D3 . D3 A2 | D3 . D3 A2 | A2 . A2 E3 | A2 . A2 C#3 | Bb2 . Bb2 F3 | G2 . G2 D3 | A2 . A2 E3 | D3 . D3 . ' },
+      { drum: true, vol: 0.1, step: 0.5, notes: 'k . . k s . . . ' },
+    ] },
+    // ワールド6 時計島：チクタク、はずむ
+    clock: { bpm: 144, tracks: [
+      { wave: 0.125, vol: 0.13, step: 0.5, notes:
+        'G5 . E5 . | C5 . E5 G5 | A5 . F5 . | D5 . F5 A5 | G5 . E5 . | C5 . D5 E5 | F5 E5 D5 B4 | C5 . . . ' +
+        'E5 . G5 . | C6 . B5 A5 | G5 . F5 . | E5 . D5 . | C5 . E5 . | G5 . A5 G5 | F5 . D5 B4 | C5 . . . ' },
+      { wave: 'tri', vol: 0.3, step: 0.5, notes:
+        'C3 G2 C3 G2 | C3 G2 C3 G2 | F2 C3 F2 C3 | D3 A2 D3 A2 | C3 G2 C3 G2 | A2 E3 A2 E3 | G2 D3 G2 D3 | C3 G2 C3 . ' +
+        'C3 G2 C3 G2 | A2 E3 A2 E3 | F2 C3 F2 C3 | C3 G2 C3 G2 | A2 E3 A2 E3 | E2 B2 E2 B2 | G2 D3 G2 D3 | C3 G2 C3 . ' },
+      { drum: true, vol: 0.09, step: 0.5, notes: 'h h h h ' },
+    ] },
+    // ワールド7 時の灯台：ふしぎなワルツ
+    time: { bpm: 132, tracks: [
+      { wave: 0.5, vol: 0.11, step: 1, notes:
+        'E5 - B4 | C5 - D5 | E5 - G5 | F#5 - - | D5 - A4 | B4 - C5 | D5 - F#5 | E5 - - | E5 - G5 | B5 - A5 | G5 - E5 | F#5 - D5 | E5 - C5 | B4 - A4 | G#4 - B4 | E5 - - ' },
+      { wave: 'tri', vol: 0.26, step: 1, notes:
+        'E3 B3 B3 | A2 E3 E3 | C3 G3 G3 | B2 F#3 F#3 | D3 A3 A3 | G2 D3 D3 | B2 F#3 F#3 | E3 B3 B3 | C3 G3 G3 | G2 D3 D3 | C3 G3 G3 | B2 F#3 F#3 | A2 E3 E3 | D3 A3 A3 | E3 B3 B3 | E3 . . ' },
+    ] },
+    // 最後のボス：はげしく
+    final: { bpm: 172, tracks: [
+      { wave: 0.25, vol: 0.14, step: 0.5, notes: 'A5 . A5 G5 | A5 . C6 . | B5 A5 G5 E5 | G5 - . . | F5 . F5 E5 | F5 . A5 . | G#5 F5 E5 D5 | E5 - . . ' },
+      { wave: 0.125, vol: 0.07, step: 0.5, notes: 'E5 . E5 D5 | E5 . G5 . | G5 F5 E5 C5 | D5 - . . | D5 . D5 C5 | D5 . F5 . | E5 D5 C5 B4 | C5 - . . ' },
+      { wave: 'tri', vol: 0.32, step: 0.5, notes: 'A2 A3 A2 A3 | A2 A3 A2 A3 | E2 E3 E2 E3 | E2 E3 E2 E3 | F2 F3 F2 F3 | D2 D3 D2 D3 | E2 E3 E2 E3 | E2 E3 G#2 B2 ' },
+      { drum: true, vol: 0.12, step: 0.5, notes: 'k h s h k k s s ' },
+    ] },
+    // エンディング：やさしく、あたたかく
+    ending: { bpm: 92, tracks: [
+      { wave: 0.5, vol: 0.12, step: 1, notes: 'E5 D5 C5 G4 | A4 C5 D5 - | E5 G5 A5 G5 | E5 - - . | F5 E5 D5 C5 | D5 E5 G5 - | E5 D5 C5 D5 | C5 - - . ' },
+      { wave: 0.125, vol: 0.06, step: 2, notes: 'C5 E5 | F5 D5 | C5 E5 | G5 - | A4 C5 | B4 D5 | G4 B4 | C5 . ' },
+      { wave: 'tri', vol: 0.26, step: 2, notes: 'C3 G2 | F2 G2 | C3 E3 | A2 G2 | F2 C3 | G2 E3 | F2 G2 | C3 . ' },
+    ] },
     // ボス：せまってくる感じ
     boss: { bpm: 164, tracks: [
       { wave: 0.25, vol: 0.14, step: 0.5, notes:
