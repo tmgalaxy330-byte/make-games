@@ -876,6 +876,11 @@
   const hasSave = () => save.prologue || Object.keys(save.cleared).length > 0;
 
   // 色をうばわれた世界：クリアするまで色がうすい
+  // 色のうすい世界は、男爵をたおす（5章クリア）までの間だけ
+  function stageSat(id) {
+    if (save.chapters[5] || Number(id[0]) >= 6) return 1;
+    return save.cleared[id] ? 1 : 0.35;
+  }
   function setSat(v, animate) {
     canvas.style.transition = animate ? 'filter 1.4s ease-out' : 'none';
     canvas.style.filter = `saturate(${v})`;
@@ -1184,7 +1189,7 @@
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
     for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen'), document.getElementById('comeback-screen')]) sc.hidden = true;
     document.body.classList.remove('cutscene', 'menu');
-    setSat(save.cleared[STAGES[stageIndex].id] ? 1 : 0.35, false);
+    setSat(stageSat(STAGES[stageIndex].id), false);
     run.time = levelDef.time || (STAGES[stageIndex].boss ? 150 : 200);
     run.hurry = false;
     SND.setTempo(1);
@@ -3041,6 +3046,7 @@
   drawFace('map-hero', SPR.STAND);
 
   function showMenuScene(el) {
+    el = el || null;
     for (const sc of [titleScreen, mapScreen, dialogEl, document.getElementById('act-screen'), document.getElementById('credits-screen'), document.getElementById('comeback-screen')]) sc.hidden = sc !== el;
     for (const m of [pauseMenu, clearMenu, overMenu]) m.hidden = true;
     document.body.classList.add('menu');
@@ -3087,10 +3093,10 @@
     mapWorld = STAGES[sel].w;
     if (from !== undefined && STAGES[from].w !== mapWorld) from = undefined;
     buildLevel(`${mapWorld}-1`); enemies = []; items = []; particles.length = 0; boss = null; movers = [];
-    setSat(save.cleared[`${mapWorld}-1`] ? 1 : 0.35, false);
+    setSat(stageSat(`${mapWorld}-1`), false);
     showMenuScene(mapScreen);
     mapNodes.innerHTML = '';
-    document.getElementById('map-world').textContent = 'WORLD ' + mapWorld + (mapWorld >= 6 ? ' ・ 第二幕' : '');
+    document.getElementById('map-world').textContent = 'WORLD ' + mapWorld;
     const prevW = WORLDS[mapWorld - 1], nextW = WORLDS[mapWorld + 1];
     document.getElementById('btn-world-prev').disabled = !prevW;
     document.getElementById('btn-world-next').disabled = !nextW || !unlocked(firstOfWorld(mapWorld + 1));
@@ -3190,13 +3196,34 @@
     { who: 'pocchi', text: '見て！　全部の灯台が光ってる！' },
     { who: 'postman', text: 'さあ、今日も配達だ！' },
   ];
+  // 男爵をたおしたあと：日常がもどった草原で、カバンから見たことのない手紙が出てくる
   const TEASER = [
-    { who: 'pocchi', text: 'ポストマン！　あなたあての手紙が来てるよ。' },
-    { who: 'postman', text: 'ぼくに？　…差出人が書いてない。' },
+    { who: 'pocchi', text: 'みんなの島に、色がもどったね。' },
+    { who: 'postman', text: 'うん。今日の配達は、これでおしまい…あれ？' },
+    { who: 'postman', text: 'カバンのそこに、見たことのない手紙が…。差出人が書いてない。' },
     { who: 'postman', text: '「時の灯台で待つ」…？' },
     { who: 'pocchi', text: '時の灯台って、歯車の時計島のずっと先だよ！' },
-    { who: 'postman', text: '行ってみよう。新しい配達だ！' },
+    { who: 'postman', text: '…行ってみよう。' },
   ];
+  // 光がもどっていく場面（文字なし）：島1〜5が順番に、灰色から色づいていく
+  const MONTAGE = ['1-1', '2-1', '3-1', '4-1', '5-3'];
+  function playMontage(done) {
+    state = 'montage'; showActors = false;
+    showMenuScene(null);
+    document.body.classList.add('menu');
+    let k = 0;
+    const step = () => {
+      if (k >= MONTAGE.length) { done(); return; }
+      buildLevel(MONTAGE[k]); enemies = []; items = []; particles.length = 0; boss = null; movers = []; traps = [];
+      CHECKPOINT = null;
+      camX = Math.max(0, Math.min(LEVEL_W * TILE * 0.35, LEVEL_W * TILE - viewW));
+      setSat(0, false); fadeT = 0.4;
+      setTimeout(() => setSat(1, true), 350);
+      k++;
+      setTimeout(step, 2300);
+    };
+    step();
+  }
   CHAPTER_END[6] = [
     { who: 'pocchi', text: 'この古い帽子…ポストマンと同じマーク！' },
     { who: 'postman', text: 'おじいちゃんの帽子だ。むかし、配達員だったんだ。' },
@@ -3364,8 +3391,9 @@
   function afterChapter(w, next) {
     if (w === 5) {
       save.act1 = true; writeSave();
-      showAct('第一幕　おわり', 'ACT 1 ・ THE END', () =>
-        playDialog(TEASER, () => showAct('第二幕へ　つづく', 'TO BE CONTINUED', () => enterMap(next)), '1-1', 'map'));
+      playMontage(() => playDialog(TEASER, () => enterMap(next), '1-1', 'map', {
+        extras: [{ img: 'LETTER_1UP', x: LEVEL_DEFS['1-1'].goal * TILE + 2 * TILE + 14, y: 10 * TILE - 2, showFrom: 2, bob: 1, bobSpeed: 3 }],
+      }));
     } else if (w === 7) {
       playEnding();
     } else enterMap(next);
@@ -3439,6 +3467,7 @@
     else if (state === 'map') want = 'map';
     else if (state === 'dialog') want = dlg ? dlg.music : null;
     else if (state === 'act' || state === 'credits') want = 'ending';
+    else if (state === 'montage') want = 'warm';
     else if (state === 'play' || state === 'pause') {
       if (boss && boss.dead) return;
       want = run.invT > 0 ? 'invincible' : theme.song;
@@ -3482,6 +3511,8 @@
         camX += 14 * dt;
         updateParticles(dt);
         if (creditT > 900 && !blackDone) { creditT = 0.8 + (CREDITS.length - 1) * CREDIT_GAP + (viewW + 50) / CREDIT_SPEED + 7.5; }
+      } else if (state === 'montage') {
+        camX += 16 * dt; time += dt; if (fadeT > 0) fadeT -= dt;
       } else if (state === 'title' || state === 'map' || state === 'act') {
         // 背景の世界をゆっくり流す
         camX = (camX + 18 * dt) % Math.max(1, LEVEL_W * TILE - viewW - 20);
