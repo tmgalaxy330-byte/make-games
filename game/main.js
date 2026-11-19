@@ -515,7 +515,7 @@
       // 深いみぞ（しずむとミス）
       B.ground(38, 65);
       B.zap(42, 2, 9, 2.8, 1.2, 0); B.zap(47, 2, 9, 2.8, 1.2, 1.4);
-      B.enemy('sakana', 51, 5); B.enemy('uni', 55, 10); B.enemy('uni', 57, 3);
+      B.enemy('sakana', 51, 5); B.enemy('uni', 55, 10); B.enemy('uni', 53, 3);
       B.pillar(60, 4); B.gem(62, 3, 0); B.hang(64, 2, 5);
       B.ground(72, 109);
       B.zap(78, 2, 9, 2.4, 1.0, 0); B.zap(82, 2, 9, 2.4, 1.0, 0.8); B.zap(86, 2, 9, 2.4, 1.0, 1.6);
@@ -602,18 +602,18 @@
       B.ground(35, 70);
       B.door(40, 5, 9, 2.6, 1.2, 0);
       B.zap(45, 5, 9, 2.4, 1.0, 0.6);
-      B.conveyor(48, 56, 10, 1); B.piston(52, 2, 2.2, 0); B.piston(55, 2, 2.2, 0.6);
+      B.conveyor(48, 56, 10, 1); B.piston(52, 2, 2.2, 0); B.piston(55, 2, 2.2, 0.33);
       B.enemy('toge', 60); B.enemy('moyan', 63);
       B.plank(64, 68, 6); B.gem(66, 3, 0);
       B.crumble(72, 73, 9); B.crumble(76, 77, 8);
       B.ground(80, 120);
       B.zap(86, 4, 9, 2.4, 1.0, 0); B.zap(89, 4, 9, 2.4, 1.0, 0.8); B.zap(92, 4, 9, 2.4, 1.0, 1.6);
-      B.conveyor(95, 105, 10, -1); B.piston(98, 2, 2.0, 0); B.piston(101, 2, 2.0, 0.5);
+      B.conveyor(95, 105, 10, 1); B.piston(98, 2, 2.0, 0); B.piston(101, 2, 2.0, 0.33);
       B.door(108, 5, 9, 3.0, 1.2, 0.3);
       B.block(112, 6, 'oneup', 'H');
       B.plank(114, 118, 6); B.gem(116, 3, 1);
       B.cmover(126.5, 7, 3, 1.2, 0, 3);
-      B.ground(133, LEVEL_W - 1);
+      B.ground(132, LEVEL_W - 1);
       for (let i = 0; i < 4; i++) B.pillar(136 + i, i + 1);
       for (let x = 140; x <= 143; x++) B.pillar(x, 4);
       B.gem(142, 3, 2);
@@ -624,8 +624,8 @@
     '5-3': { w: 170, theme: 'castleTop', time: 280, checkpoint: 76, goal: 156, lighthouse: true, build(B) {
       B.ground(0, 20);
       B.block(8, 6, 'plane'); B.enemy('moyan', 13);
-      B.ground(21, 25); B.crumble(26, 33, 10); B.ground(34, 60);
-      B.wind(21, 40, 3.6, 1.6, -90, 0);                                  // 向かい風＋くずれる橋
+      B.ground(21, 27); B.crumble(28, 33, 10); B.ground(34, 60);
+      B.wind(21, 40, 3.8, 1.4, -90, 0);                                  // 向かい風＋くずれる橋（風がやんだらわたる）
       B.bolt(38, 2.6, 0); B.bolt(42, 2.6, 0.9); B.bolt(46, 2.6, 1.8);
       B.enemy('toge', 50);
       B.piston(54, 2, 1.8, 0); B.piston(56, 2, 1.8, 0.5);
@@ -660,7 +660,7 @@
       B.enemy('moyan', 15); B.enemy('toge', 18);
       B.cmover(26.5, 7, 3, 1.3, 0, 3);
       B.ground(33, 64);
-      B.conveyor(36, 46, 10, 1); B.piston(40, 2, 2.0, 0); B.piston(43, 2, 2.0, 0.5);
+      B.conveyor(36, 46, 10, 1); B.piston(40, 2, 2.0, 0); B.piston(43, 2, 2.0, 0.33);
       B.plank(42, 46, 6); B.gem(44, 3, 0);
       B.door(50, 5, 9, 2.6, 1.0, 0);
       B.enemy('moyan', 55);
@@ -668,8 +668,8 @@
       B.enemy('hover', 67.5, 8); B.enemy('hover', 71, 8); B.enemy('hover', 74.5, 8);
       B.ground(78, 118);
       B.door(86, 5, 9, 2.6, 1.0, 0); B.door(90, 5, 9, 2.6, 1.0, 1.3);
-      B.conveyor(93, 103, 10, -1);
-      B.piston(96, 2, 1.8, 0); B.piston(99, 2, 1.8, 0.3); B.piston(102, 2, 1.8, 0.6);
+      B.conveyor(93, 103, 10, 1);
+      B.piston(96, 2, 1.8, 0); B.piston(99, 2, 1.8, 0.33); B.piston(102, 2, 1.8, 0.66);
       B.block(106, 6, 'onigiri');
       B.vmover(110, 3, 2, 5, 1.4);
       for (let x = 112; x <= 116; x++) B.pillar(x, 5);
@@ -714,7 +714,7 @@
       B.block(8, 6, 'plane'); B.enemy('moyan', 13);
       B.vmover(20, 5, 2, 3, 1.5, 0); B.vmover(24, 5, 2, 3, 1.5, 1.6);
       B.ground(29, 62);
-      B.conveyor(32, 40, 10, -1); B.piston(34, 2, 1.8, 0); B.piston(37, 2, 1.8, 0.6);
+      B.conveyor(32, 40, 10, 1); B.piston(34, 2, 1.8, 0); B.piston(37, 2, 1.8, 0.33);
       B.door(44, 4, 9, 2.4, 1.0, 0);
       B.zap(48, 4, 9, 2.0, 0.8, 0.5);
       B.crumble(52, 57, 7); B.gem(54, 4, 0);
@@ -749,7 +749,7 @@
       B.ground(32, 66);
       B.bolt(36, 2.0, 0); B.bolt(39, 2.0, 0.6); B.bolt(42, 2.0, 1.2);
       B.door(46, 4, 9, 2.2, 0.9, 0);
-      B.conveyor(49, 58, 10, 1); B.piston(52, 2, 1.6, 0); B.piston(55, 2, 1.6, 0.4);
+      B.conveyor(49, 58, 10, 1); B.piston(52, 2, 1.6, 0); B.piston(55, 2, 1.6, 0.33);
       B.plank(53, 57, 6); B.gem(55, 3, 0);
       B.zap(62, 4, 9, 1.8, 0.7, 0.3);
       B.cmover(70, 6, 2, 1.5, 0, 3); B.cmover(75.5, 6, 2, 1.5, Math.PI, 3);
@@ -767,13 +767,13 @@
     } },
     '7-2': { w: 170, theme: 'timeIn', time: 300, checkpoint: 86, goal: 156, build(B) {
       B.ceiling(0, LEVEL_W - 1, 1);
-      B.ground(0, 20);
+      B.ground(0, 22);
       B.block(8, 6, 'bag');
       B.cmover(27.5, 6, 3, 1.1, 0, 3);
       B.ground(33, 70);
       B.zap(38, 4, 9, 1.8, 0.7, 0); B.zap(41, 4, 9, 1.8, 0.7, 0.6); B.zap(44, 4, 9, 1.8, 0.7, 1.2);
-      B.conveyor(47, 60, 10, -1);
-      B.piston(50, 2, 1.6, 0); B.piston(53, 2, 1.6, 0.3); B.piston(56, 2, 1.6, 0.6); B.piston(59, 2, 1.6, 0.9);
+      B.conveyor(47, 60, 10, 1);
+      B.piston(50, 2, 1.6, 0); B.piston(53, 2, 1.6, 0.33); B.piston(56, 2, 1.6, 0.66); B.piston(59, 2, 1.6, 0.99);
       B.plank(50, 56, 6); B.gem(53, 3, 0);
       B.door(64, 4, 9, 2.2, 0.9, 0.4);
       B.enemy('hover', 73.5, 8, { sway: 0.45 }); B.enemy('hover', 77, 8, { sway: 0.45 }); B.enemy('hover', 80.5, 8, { sway: 0.45 });
@@ -791,12 +791,12 @@
     '7-3': { w: 170, theme: 'timeTop', time: 300, checkpoint: 60, goal: 156, lighthouse: true, build(B) {
       B.ground(0, 16);
       B.block(7, 6, 'plane'); B.enemy('moyan', 12);
-      B.crumble(17, 24, 10); B.ground(25, 44);
-      B.wind(17, 40, 3.0, 1.5, -90, 0);
+      B.ground(17, 18); B.crumble(19, 24, 10); B.ground(25, 44);
+      B.wind(17, 40, 3.6, 1.4, -90, 0);
       B.bolt(29, 2.0, 0); B.bolt(33, 2.0, 0.7); B.bolt(37, 2.0, 1.4);
       B.enemy('hover', 47.5, 8, { sway: 0.45 }); B.enemy('hover', 51, 8, { sway: 0.45 }); B.enemy('hover', 54.5, 8, { sway: 0.45 });
       B.ground(58, 92);
-      B.conveyor(62, 72, 10, 1); B.piston(65, 2, 1.4, 0); B.piston(68, 2, 1.4, 0.25); B.piston(71, 2, 1.4, 0.5);
+      B.conveyor(62, 72, 10, 1); B.piston(65, 2, 1.4, 0); B.piston(68, 2, 1.4, 0.33); B.piston(71, 2, 1.4, 0.66);
       B.plank(65, 71, 6); B.gem(68, 3, 0);
       B.door(76, 4, 9, 2.0, 0.9, 0); B.zap(80, 4, 9, 1.8, 0.7, 0.6); B.door(84, 4, 9, 2.0, 0.9, 1.1);
       B.cmover(96.5, 7, 2.5, 1.6, 0, 3); B.cmover(103, 7, 2.5, 1.6, Math.PI, 3);
@@ -2214,13 +2214,19 @@
   }
 
   // ------------------------------------------------------------------ わな（タイミングで通る）
+  // トゲの柱の動き：出ている時間は周期の45%まで（最大1.0秒）。
+  // 周期が短くても、かならず「引っこんでいる時間」が残るようにする（通れるすきまを保証）
+  const pistonTiming = tr => {
+    const rise = 0.15, lower = 0.2, up = Math.min(1.0, tr.period * 0.45);
+    return { rise, lower, up, down: tr.period - rise - up - lower };
+  };
   const pistonF = tr => {
-    // 1周期：下がっている → 0.2秒で出る → 1.0秒出たまま → 0.3秒で引っこむ
-    const ph = (trapClock + tr.phase) % tr.period, down = tr.period - 1.5;
+    const { rise, lower, up, down } = pistonTiming(tr);
+    const ph = (trapClock + tr.phase) % tr.period;
     if (ph < down) return 0;
-    if (ph < down + 0.2) return (ph - down) / 0.2;
-    if (ph < down + 1.2) return 1;
-    return 1 - (ph - down - 1.2) / 0.3;
+    if (ph < down + rise) return (ph - down) / rise;
+    if (ph < down + rise + up) return 1;
+    return 1 - (ph - down - rise - up) / lower;
   };
   function trapBox(tr) {
     if (tr.type === 'bolt') return { x: tr.x * TILE + 3, y: 0, w: 10, h: 10 * TILE };
@@ -2261,8 +2267,8 @@
       }
       if (tr.type === 'piston') {
         tr.f = pistonF(tr);
-        const ph = (trapClock + tr.phase) % tr.period;
-        tr.warn = ph > tr.period - 1.5 - 0.4 && ph < tr.period - 1.5;
+        const ph = (trapClock + tr.phase) % tr.period, dn = pistonTiming(tr).down;
+        tr.warn = ph > dn - 0.35 && ph < dn;
         if (tr.f > 0.15 && overlap(player, trapBox(tr))) damage();
       } else {
         const ph = (trapClock + tr.phase) % tr.period;
@@ -3328,6 +3334,6 @@
     player, run, keys: keyKeys, sync: syncInput, collect, damage,
     get level() { return level; }, get enemies() { return enemies; }, get items() { return items; },
     get balls() { return balls; }, get state() { return state; }, get stamps() { return run.stamps; },
-    get save() { return save; }, get levelDef() { return levelDef; }, get movers() { return movers; }, enterStage, enterMap, enterTitle, get boss() { return boss; }, get bigGem() { return bigGem; },
+    get save() { return save; }, get levelDef() { return levelDef; }, get movers() { return movers; }, get traps() { return traps; }, get trapClock() { return trapClock; }, enterStage, enterMap, enterTitle, get boss() { return boss; }, get bigGem() { return bigGem; },
   };
 })();
