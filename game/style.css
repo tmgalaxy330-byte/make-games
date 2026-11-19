@@ -1,3 +1,9 @@
+/* ドット文字（DotGothic16・SIL Open Font License。ゲームで使う文字だけに軽くしたもの。fonts/OFL.txt） */
+@font-face {
+  font-family: "DotGothic16";
+  src: url("fonts/DotGothic16-subset.woff2") format("woff2");
+  font-display: swap;
+}
 :root {
   --pill: rgba(20, 24, 48, .58);
   --ink: #fff;

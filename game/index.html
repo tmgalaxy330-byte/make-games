@@ -7,8 +7,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#5c96fa">
 <title>ミスターポストマン</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-title" content="ポストマン">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -150,5 +153,11 @@
 <script src="sprites.js"></script>
 <script src="audio.js"></script>
 <script src="main.js"></script>
+<script>
+  // 一度ひらけば、インターネットがなくても遊べるようにする（https のときだけ）
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
 </body>
 </html>

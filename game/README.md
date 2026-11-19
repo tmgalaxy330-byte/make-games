@@ -31,3 +31,8 @@
 - `sprites.js` … ドット絵データ
 - `audio.js` … 効果音とBGM（Web Audioで作るファミコン風の音。曲はオリジナル）
 - `main.js` … ゲームの動き（物理・当たり判定・描画）
+
+## オフラインで遊ぶ（飛行機の中など）
+`game` フォルダを https のサーバー（GitHub Pages など）に置くと、**一度ひらけば、インターネットがなくても遊べます**
+（`sw.js` がゲームのファイルを保存します）。iPhoneでは Safari の共有ボタン →「ホーム画面に追加」でアプリのように使えます。
+GitHub Pages への公開は `.github/workflows/pages.yml` が自動で行います（Settings → Pages → Source を「GitHub Actions」にする）。
